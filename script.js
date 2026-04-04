@@ -3,8 +3,6 @@ const titleInput = document.getElementById("title");
 const previewText = document.getElementById("preview-text");
 const reportTitle = document.getElementById("report-title");
 const liveTime = document.getElementById("live-time");
-const clockInBtn = document.getElementById("clock-in-btn");
-const clockOutBtn = document.getElementById("clock-out-btn");
 const hoursOutput = document.getElementById("hours-output");
 const clearFormBtn = document.getElementById("clear-form-btn");
 const saveRecordBtn = document.getElementById("save-record-btn");
@@ -33,10 +31,15 @@ const breakMinutesInput = document.getElementById("break-minutes");
 const followUpInput = document.getElementById("follow-up");
 const updatesInput = document.getElementById("updates");
 
-const STORAGE_KEY = "attendance-tracker-history-v1";
+const SUPABASE_URL = "https://ulwnlwdjawxfmvcxfbxb.supabase.co";
+const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InVsd25sd2RqYXd4Zm12Y3hmYnhiIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzUzMTk3MDYsImV4cCI6MjA5MDg5NTcwNn0.jIM4gmyW9c0jvUmKbd78Rpsnzmy0r9RdThfFDvY7axk";
+const TABLE_NAME = "attendance_records";
 const ADMIN_STATE_KEY = "attendance-tracker-admin-state";
 const ADMIN_USERNAME = "admin";
 const ADMIN_PASSWORD = "HSUJ";
+
+const supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+let historyRecords = [];
 
 function pad(value) {
   return String(value).padStart(2, "0");
@@ -181,18 +184,6 @@ function getFormData() {
   return Object.fromEntries(new FormData(form).entries());
 }
 
-function loadHistory() {
-  try {
-    return JSON.parse(localStorage.getItem(STORAGE_KEY) || "[]");
-  } catch {
-    return [];
-  }
-}
-
-function saveHistory(records) {
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(records));
-}
-
 function isAdmin() {
   return localStorage.getItem(ADMIN_STATE_KEY) === "true";
 }
@@ -213,48 +204,134 @@ function updateAdminUi() {
   adminToggleBtn.textContent = loggedIn ? "Admin Active" : "Admin Login";
   adminLogoutBtn.hidden = !loggedIn;
   adminLoginBtn.hidden = loggedIn;
-
-  if (loggedIn) {
-    adminStatus.textContent = "Admin access enabled. You can now delete records and clear history.";
-  } else {
-    adminStatus.textContent = "Admin access is required to delete records or clear history.";
-  }
+  adminStatus.textContent = loggedIn
+    ? "Admin access enabled. You can now delete records and clear history."
+    : "Admin access is required to delete records or clear history.";
 }
 
 function getHistoryLabel(record) {
-  const totalMinutes = getWorkedMinutes(record.clockIn, record.clockOut, record.breakMinutes);
-  return `${formatDateLabel(record.date)} | ${formatWorkedHours(totalMinutes)} | ${record.team || "No team"}`;
+  const totalMinutes = getWorkedMinutes(record.clock_in, record.clock_out, record.break_minutes);
+  return `${formatDateLabel(record.work_date)} | ${formatWorkedHours(totalMinutes)} | ${record.team || "No team"}`;
+}
+
+function mapRecordToForm(record) {
+  return {
+    id: record.id,
+    title: record.project_title || "",
+    date: record.work_date || "",
+    team: record.team || "",
+    workMode: record.work_mode || "remote/field",
+    clockIn: record.clock_in || "",
+    clockOut: record.clock_out || "",
+    breakMinutes: record.break_minutes ?? "",
+    followUp: record.follow_up || "",
+    updates: record.updates || "",
+  };
+}
+
+function mapFormToRecord(data) {
+  return {
+    project_title: data.title || "",
+    work_date: data.date || null,
+    team: data.team || "",
+    work_mode: data.workMode || "",
+    clock_in: data.clockIn || null,
+    clock_out: data.clockOut || null,
+    break_minutes: data.breakMinutes === "" ? null : Number(data.breakMinutes),
+    follow_up: data.followUp || "",
+    updates: data.updates || "",
+  };
 }
 
 function fillForm(record) {
-  titleInput.value = record.title || "";
-  dateInput.value = record.date || "";
-  teamInput.value = record.team || "";
-  workModeInput.value = record.workMode || "remote/field";
-  clockInInput.value = record.clockIn || "";
-  clockOutInput.value = record.clockOut || "";
-  breakMinutesInput.value = record.breakMinutes || "0";
-  followUpInput.value = record.followUp || "";
-  updatesInput.value = record.updates || "";
+  const mapped = mapRecordToForm(record);
+  titleInput.value = mapped.title;
+  dateInput.value = mapped.date;
+  teamInput.value = mapped.team;
+  workModeInput.value = mapped.workMode || "remote/field";
+  clockInInput.value = mapped.clockIn;
+  clockOutInput.value = mapped.clockOut;
+  breakMinutesInput.value = mapped.breakMinutes === null ? "" : mapped.breakMinutes;
+  followUpInput.value = mapped.followUp;
+  updatesInput.value = mapped.updates;
   updatePreview();
 }
 
-function deleteHistoryItem(id) {
+async function loadHistoryFromSupabase() {
+  const { data, error } = await supabaseClient
+    .from(TABLE_NAME)
+    .select("*")
+    .order("work_date", { ascending: false })
+    .order("created_at", { ascending: false });
+
+  if (error) {
+    adminStatus.textContent = `Supabase load error: ${error.message}`;
+    historyRecords = [];
+    renderHistory();
+    return;
+  }
+
+  historyRecords = data || [];
+  renderHistory();
+}
+
+async function saveRecordToSupabase() {
+  const data = getFormData();
+
+  if (!data.date) {
+    saveRecordBtn.textContent = "Select date first";
+    window.setTimeout(() => {
+      saveRecordBtn.textContent = "Save Record";
+    }, 1500);
+    return;
+  }
+
+  const payload = mapFormToRecord(data);
+
+  const { error } = await supabaseClient
+    .from(TABLE_NAME)
+    .upsert(payload, { onConflict: "work_date" });
+
+  if (error) {
+    saveRecordBtn.textContent = "Save failed";
+    adminStatus.textContent = `Supabase save error: ${error.message}`;
+    window.setTimeout(() => {
+      saveRecordBtn.textContent = "Save Record";
+    }, 1500);
+    return;
+  }
+
+  saveRecordBtn.textContent = "Saved";
+  window.setTimeout(() => {
+    saveRecordBtn.textContent = "Save Record";
+  }, 1500);
+
+  await loadHistoryFromSupabase();
+}
+
+async function deleteHistoryItem(id) {
   if (!isAdmin()) {
     adminStatus.textContent = "Admin login required to delete records.";
     return;
   }
 
-  const next = loadHistory().filter((record) => record.id !== id);
-  saveHistory(next);
-  renderHistory();
+  const { error } = await supabaseClient
+    .from(TABLE_NAME)
+    .delete()
+    .eq("id", id);
+
+  if (error) {
+    adminStatus.textContent = `Supabase delete error: ${error.message}`;
+    return;
+  }
+
+  await loadHistoryFromSupabase();
 }
 
 function renderHistory() {
-  const records = loadHistory().sort((a, b) => (b.date || "").localeCompare(a.date || ""));
   historyList.innerHTML = "";
 
-  if (records.length === 0) {
+  if (historyRecords.length === 0) {
     historyEmpty.hidden = false;
     historyList.appendChild(historyEmpty);
     return;
@@ -262,13 +339,13 @@ function renderHistory() {
 
   historyEmpty.hidden = true;
 
-  records.forEach((record) => {
+  historyRecords.forEach((record) => {
     const item = document.createElement("article");
     item.className = "history-item";
 
     const content = document.createElement("div");
     const title = document.createElement("h3");
-    title.textContent = record.title || "Untitled Project";
+    title.textContent = record.project_title || "Untitled Project";
     const meta = document.createElement("p");
     meta.className = "history-meta";
     meta.textContent = getHistoryLabel(record);
@@ -287,8 +364,9 @@ function renderHistory() {
 
     const removeButton = document.createElement("button");
     removeButton.type = "button";
-    removeButton.className = "small-button";
+    removeButton.className = "small-button admin-only";
     removeButton.textContent = "Delete";
+    removeButton.hidden = !isAdmin();
     removeButton.addEventListener("click", () => deleteHistoryItem(record.id));
 
     actions.appendChild(loadButton);
@@ -297,51 +375,6 @@ function renderHistory() {
     item.appendChild(actions);
     historyList.appendChild(item);
   });
-}
-
-function persistRecord() {
-  const data = getFormData();
-
-  if (!data.date) {
-    return false;
-  }
-
-  const record = {
-    ...data,
-    id: data.date,
-    savedAt: new Date().toISOString(),
-  };
-
-  const records = loadHistory();
-  const existingIndex = records.findIndex((entry) => entry.id === record.id);
-
-  if (existingIndex >= 0) {
-    records[existingIndex] = record;
-  } else {
-    records.push(record);
-  }
-
-  saveHistory(records);
-  renderHistory();
-  return true;
-}
-
-function saveRecordManually() {
-  const data = getFormData();
-
-  if (!data.date) {
-    saveRecordBtn.textContent = "Select date first";
-    window.setTimeout(() => {
-      saveRecordBtn.textContent = "Save Record";
-    }, 1500);
-    return;
-  }
-
-  persistRecord();
-  saveRecordBtn.textContent = "Saved";
-  window.setTimeout(() => {
-    saveRecordBtn.textContent = "Save Record";
-  }, 1500);
 }
 
 function clearForm() {
@@ -374,6 +407,7 @@ function loginAdmin() {
     setAdminState(true);
     adminStatus.textContent = "Admin login successful.";
     adminPasswordInput.value = "";
+    renderHistory();
     return;
   }
 
@@ -386,6 +420,7 @@ function logoutAdmin() {
   adminUsernameInput.value = "";
   adminPasswordInput.value = "";
   adminStatus.textContent = "Admin logged out.";
+  renderHistory();
 }
 
 function updatePreview() {
@@ -416,6 +451,25 @@ function copyReport() {
       copyBtn.textContent = "Copy Report";
     }, 1400);
   });
+}
+
+function exportRowsAsCsv(headers, rows, fileName) {
+  const csv = [
+    headers.map(escapeCsv).join(","),
+    ...rows.map((row) => row.map(escapeCsv).join(",")),
+    "",
+  ].join("\n");
+
+  const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+
+  link.href = url;
+  link.download = fileName;
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+  URL.revokeObjectURL(url);
 }
 
 function exportToExcel() {
@@ -454,29 +508,8 @@ function exportToExcel() {
   }, 1500);
 }
 
-function exportRowsAsCsv(headers, rows, fileName) {
-  const csv = [
-    headers.map(escapeCsv).join(","),
-    ...rows.map((row) => row.map(escapeCsv).join(",")),
-    "",
-  ].join("\n");
-
-  const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
-  const url = URL.createObjectURL(blob);
-  const link = document.createElement("a");
-
-  link.href = url;
-  link.download = fileName;
-  document.body.appendChild(link);
-  link.click();
-  document.body.removeChild(link);
-  URL.revokeObjectURL(url);
-}
-
 function exportHistoryToExcel() {
-  const records = loadHistory().sort((a, b) => (a.date || "").localeCompare(b.date || ""));
-
-  if (records.length === 0) {
+  if (historyRecords.length === 0) {
     exportHistoryBtn.textContent = "No history";
     window.setTimeout(() => {
       exportHistoryBtn.textContent = "Export Full History";
@@ -496,21 +529,25 @@ function exportHistoryToExcel() {
     "Planned Or Follow Up Details",
     "Update On Outcomes",
   ];
-  const rows = records.map((record) => {
-    const row = buildExportRow(record);
-    return [
-      row.title,
-      row.date,
-      row.workMode,
-      row.clockIn,
-      row.clockOut,
-      row.breakMinutes,
-      row.totalHours,
-      row.team,
-      row.followUp,
-      row.updates,
-    ];
-  });
+
+  const rows = historyRecords
+    .slice()
+    .sort((a, b) => (a.work_date || "").localeCompare(b.work_date || ""))
+    .map((record) => {
+      const row = buildExportRow(mapRecordToForm(record));
+      return [
+        row.title,
+        row.date,
+        row.workMode,
+        row.clockIn,
+        row.clockOut,
+        row.breakMinutes,
+        row.totalHours,
+        row.team,
+        row.followUp,
+        row.updates,
+      ];
+    });
 
   exportRowsAsCsv(headers, rows, "attendance-history.csv");
 
@@ -520,40 +557,41 @@ function exportHistoryToExcel() {
   }, 1500);
 }
 
-clockInBtn.addEventListener("click", () => {
-  clockInInput.value = getCurrentTimeValue();
-  updatePreview();
-});
+async function clearAllHistory() {
+  if (!isAdmin()) {
+    adminStatus.textContent = "Admin login required to clear history.";
+    return;
+  }
 
-clockOutBtn.addEventListener("click", () => {
-  clockOutInput.value = getCurrentTimeValue();
-  updatePreview();
-});
+  const { error } = await supabaseClient
+    .from(TABLE_NAME)
+    .delete()
+    .not("id", "is", null);
+
+  if (error) {
+    adminStatus.textContent = `Supabase clear error: ${error.message}`;
+    return;
+  }
+
+  adminStatus.textContent = "History cleared.";
+  await loadHistoryFromSupabase();
+}
 
 clearFormBtn.addEventListener("click", clearForm);
-saveRecordBtn.addEventListener("click", saveRecordManually);
+saveRecordBtn.addEventListener("click", saveRecordToSupabase);
 copyBtn.addEventListener("click", copyReport);
 exportBtn.addEventListener("click", exportToExcel);
 exportHistoryBtn.addEventListener("click", exportHistoryToExcel);
 adminToggleBtn.addEventListener("click", toggleAdminPanel);
 adminLoginBtn.addEventListener("click", loginAdmin);
 adminLogoutBtn.addEventListener("click", logoutAdmin);
-clearHistoryBtn.addEventListener("click", () => {
-  if (!isAdmin()) {
-    adminStatus.textContent = "Admin login required to clear history.";
-    return;
-  }
-
-  localStorage.removeItem(STORAGE_KEY);
-  renderHistory();
-  adminStatus.textContent = "History cleared.";
-});
+clearHistoryBtn.addEventListener("click", clearAllHistory);
 form.addEventListener("input", updatePreview);
 titleInput.addEventListener("input", updatePreview);
 
 setTodayDate();
 updateClock();
 updateAdminUi();
-renderHistory();
 updatePreview();
+loadHistoryFromSupabase();
 window.setInterval(updateClock, 1000);
