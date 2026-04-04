@@ -6,10 +6,19 @@ const liveTime = document.getElementById("live-time");
 const clockInBtn = document.getElementById("clock-in-btn");
 const clockOutBtn = document.getElementById("clock-out-btn");
 const hoursOutput = document.getElementById("hours-output");
+const clearFormBtn = document.getElementById("clear-form-btn");
+const saveRecordBtn = document.getElementById("save-record-btn");
 const copyBtn = document.getElementById("copy-btn");
 const exportBtn = document.getElementById("export-btn");
 const exportHistoryBtn = document.getElementById("export-history-btn");
 const clearHistoryBtn = document.getElementById("clear-history-btn");
+const adminToggleBtn = document.getElementById("admin-toggle-btn");
+const adminPanel = document.getElementById("admin-panel");
+const adminLoginBtn = document.getElementById("admin-login-btn");
+const adminLogoutBtn = document.getElementById("admin-logout-btn");
+const adminUsernameInput = document.getElementById("admin-username");
+const adminPasswordInput = document.getElementById("admin-password");
+const adminStatus = document.getElementById("admin-status");
 const previewDay = document.getElementById("preview-day");
 const previewMetaTime = document.getElementById("preview-meta-time");
 const historyList = document.getElementById("history-list");
@@ -25,6 +34,9 @@ const followUpInput = document.getElementById("follow-up");
 const updatesInput = document.getElementById("updates");
 
 const STORAGE_KEY = "attendance-tracker-history-v1";
+const ADMIN_STATE_KEY = "attendance-tracker-admin-state";
+const ADMIN_USERNAME = "admin";
+const ADMIN_PASSWORD = "HSUJ";
 
 function pad(value) {
   return String(value).padStart(2, "0");
@@ -181,6 +193,34 @@ function saveHistory(records) {
   localStorage.setItem(STORAGE_KEY, JSON.stringify(records));
 }
 
+function isAdmin() {
+  return localStorage.getItem(ADMIN_STATE_KEY) === "true";
+}
+
+function setAdminState(isLoggedIn) {
+  localStorage.setItem(ADMIN_STATE_KEY, String(isLoggedIn));
+  updateAdminUi();
+}
+
+function updateAdminUi() {
+  const loggedIn = isAdmin();
+  const adminOnlyItems = document.querySelectorAll(".admin-only");
+
+  adminOnlyItems.forEach((item) => {
+    item.hidden = !loggedIn;
+  });
+
+  adminToggleBtn.textContent = loggedIn ? "Admin Active" : "Admin Login";
+  adminLogoutBtn.hidden = !loggedIn;
+  adminLoginBtn.hidden = loggedIn;
+
+  if (loggedIn) {
+    adminStatus.textContent = "Admin access enabled. You can now delete records and clear history.";
+  } else {
+    adminStatus.textContent = "Admin access is required to delete records or clear history.";
+  }
+}
+
 function getHistoryLabel(record) {
   const totalMinutes = getWorkedMinutes(record.clockIn, record.clockOut, record.breakMinutes);
   return `${formatDateLabel(record.date)} | ${formatWorkedHours(totalMinutes)} | ${record.team || "No team"}`;
@@ -200,6 +240,11 @@ function fillForm(record) {
 }
 
 function deleteHistoryItem(id) {
+  if (!isAdmin()) {
+    adminStatus.textContent = "Admin login required to delete records.";
+    return;
+  }
+
   const next = loadHistory().filter((record) => record.id !== id);
   saveHistory(next);
   renderHistory();
@@ -254,11 +299,11 @@ function renderHistory() {
   });
 }
 
-function autoSaveRecord() {
+function persistRecord() {
   const data = getFormData();
 
   if (!data.date) {
-    return;
+    return false;
   }
 
   const record = {
@@ -278,6 +323,69 @@ function autoSaveRecord() {
 
   saveHistory(records);
   renderHistory();
+  return true;
+}
+
+function saveRecordManually() {
+  const data = getFormData();
+
+  if (!data.date) {
+    saveRecordBtn.textContent = "Select date first";
+    window.setTimeout(() => {
+      saveRecordBtn.textContent = "Save Record";
+    }, 1500);
+    return;
+  }
+
+  persistRecord();
+  saveRecordBtn.textContent = "Saved";
+  window.setTimeout(() => {
+    saveRecordBtn.textContent = "Save Record";
+  }, 1500);
+}
+
+function clearForm() {
+  titleInput.value = "";
+  dateInput.value = "";
+  teamInput.value = "";
+  workModeInput.value = "remote/field";
+  clockInInput.value = "";
+  clockOutInput.value = "";
+  breakMinutesInput.value = "60";
+  followUpInput.value = "";
+  updatesInput.value = "";
+  updatePreview();
+
+  clearFormBtn.textContent = "Cleared";
+  window.setTimeout(() => {
+    clearFormBtn.textContent = "Clear Form";
+  }, 1500);
+}
+
+function toggleAdminPanel() {
+  adminPanel.hidden = !adminPanel.hidden;
+}
+
+function loginAdmin() {
+  const username = adminUsernameInput.value.trim();
+  const password = adminPasswordInput.value;
+
+  if (username === ADMIN_USERNAME && password === ADMIN_PASSWORD) {
+    setAdminState(true);
+    adminStatus.textContent = "Admin login successful.";
+    adminPasswordInput.value = "";
+    return;
+  }
+
+  setAdminState(false);
+  adminStatus.textContent = "Invalid admin username or password.";
+}
+
+function logoutAdmin() {
+  setAdminState(false);
+  adminUsernameInput.value = "";
+  adminPasswordInput.value = "";
+  adminStatus.textContent = "Admin logged out.";
 }
 
 function updatePreview() {
@@ -291,7 +399,6 @@ function updatePreview() {
     ? new Date(`${data.date}T00:00:00`).toLocaleDateString("en-US", { weekday: "long" })
     : "Today";
   previewMetaTime.textContent = data.clockOut || data.clockIn || getCurrentTimeValue();
-  autoSaveRecord();
 }
 
 function copyReport() {
@@ -423,18 +530,30 @@ clockOutBtn.addEventListener("click", () => {
   updatePreview();
 });
 
+clearFormBtn.addEventListener("click", clearForm);
+saveRecordBtn.addEventListener("click", saveRecordManually);
 copyBtn.addEventListener("click", copyReport);
 exportBtn.addEventListener("click", exportToExcel);
 exportHistoryBtn.addEventListener("click", exportHistoryToExcel);
+adminToggleBtn.addEventListener("click", toggleAdminPanel);
+adminLoginBtn.addEventListener("click", loginAdmin);
+adminLogoutBtn.addEventListener("click", logoutAdmin);
 clearHistoryBtn.addEventListener("click", () => {
+  if (!isAdmin()) {
+    adminStatus.textContent = "Admin login required to clear history.";
+    return;
+  }
+
   localStorage.removeItem(STORAGE_KEY);
   renderHistory();
+  adminStatus.textContent = "History cleared.";
 });
 form.addEventListener("input", updatePreview);
 titleInput.addEventListener("input", updatePreview);
 
 setTodayDate();
 updateClock();
+updateAdminUi();
 renderHistory();
 updatePreview();
 window.setInterval(updateClock, 1000);

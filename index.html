@@ -124,6 +124,8 @@
         </article>
 
         <div class="summary-actions">
+          <button class="action-button ghost" id="clear-form-btn" type="button">Clear Form</button>
+          <button class="action-button ghost" id="save-record-btn" type="button">Save Record</button>
           <button class="action-button ghost" id="copy-btn" type="button">Copy Report</button>
           <button class="action-button secondary" id="export-btn" type="button">Export Current</button>
           <button class="action-button primary" id="export-history-btn" type="button">Export Full History</button>
@@ -137,7 +139,28 @@
           <h2>Saved History</h2>
           <p>Daily records are saved automatically in this browser.</p>
         </div>
-        <button class="action-button ghost" id="clear-history-btn" type="button">Clear History</button>
+        <div class="admin-tools">
+          <button class="action-button ghost" id="admin-toggle-btn" type="button">Admin Login</button>
+          <button class="action-button ghost admin-only" id="clear-history-btn" type="button" hidden>Clear History</button>
+        </div>
+      </div>
+
+      <div class="admin-panel" id="admin-panel" hidden>
+        <div class="admin-grid">
+          <label>
+            <span>Username</span>
+            <input id="admin-username" type="text" autocomplete="username">
+          </label>
+          <label>
+            <span>Password</span>
+            <input id="admin-password" type="password" autocomplete="current-password">
+          </label>
+        </div>
+        <div class="admin-actions">
+          <button class="action-button primary" id="admin-login-btn" type="button">Login</button>
+          <button class="action-button ghost admin-only" id="admin-logout-btn" type="button" hidden>Logout</button>
+        </div>
+        <p class="admin-status" id="admin-status">Admin access is required to delete records or clear history.</p>
       </div>
 
       <div class="history-list" id="history-list">

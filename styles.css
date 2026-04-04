@@ -124,6 +124,14 @@ body {
   flex-wrap: wrap;
 }
 
+.admin-tools,
+.admin-actions {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+  align-items: center;
+}
+
 .quick-actions {
   margin-bottom: 18px;
 }
@@ -284,6 +292,27 @@ textarea:focus {
   gap: 12px;
 }
 
+.admin-panel {
+  margin-bottom: 18px;
+  padding: 18px;
+  border-radius: 22px;
+  background: linear-gradient(180deg, rgba(31, 109, 83, 0.08), rgba(255, 255, 255, 0.7));
+  border: 1px solid rgba(31, 109, 83, 0.12);
+}
+
+.admin-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+  margin-bottom: 14px;
+}
+
+.admin-status {
+  margin: 14px 0 0;
+  color: var(--muted);
+  font-size: 0.92rem;
+}
+
 .history-empty {
   margin: 0;
   padding: 18px;
@@ -358,13 +387,16 @@ textarea:focus {
   }
 
   .editor-grid,
-  .stats-grid {
+  .stats-grid,
+  .admin-grid {
     grid-template-columns: 1fr;
   }
 
   .quick-actions,
   .summary-actions,
-  .history-heading {
+  .history-heading,
+  .admin-tools,
+  .admin-actions {
     flex-direction: column;
   }
 
