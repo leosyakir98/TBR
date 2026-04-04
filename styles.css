@@ -250,6 +250,10 @@ textarea:focus {
 }
 
 .report-card-header {
+  display: flex;
+  align-items: start;
+  justify-content: space-between;
+  gap: 12px;
   margin-bottom: 14px;
 }
 
@@ -265,6 +269,17 @@ textarea:focus {
 .report-card h3 {
   margin: 0;
   font-size: 1.5rem;
+}
+
+.edit-status {
+  margin: 0;
+  padding: 8px 12px;
+  border-radius: 999px;
+  background: rgba(31, 109, 83, 0.1);
+  color: var(--primary);
+  font-size: 0.82rem;
+  font-weight: 800;
+  white-space: nowrap;
 }
 
 .report-output {

@@ -2,6 +2,7 @@ const form = document.getElementById("report-form");
 const titleInput = document.getElementById("title");
 const previewText = document.getElementById("preview-text");
 const reportTitle = document.getElementById("report-title");
+const editStatus = document.getElementById("edit-status");
 const liveTime = document.getElementById("live-time");
 const hoursOutput = document.getElementById("hours-output");
 const clearFormBtn = document.getElementById("clear-form-btn");
@@ -41,6 +42,7 @@ const ADMIN_PASSWORD = "HSUJ";
 const supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 let historyRecords = [];
 let historyChannel = null;
+let currentRecordId = null;
 
 function pad(value) {
   return String(value).padStart(2, "0");
@@ -157,27 +159,19 @@ function sanitizeFileName(value) {
     .toLowerCase();
 }
 
-function escapeCsv(value) {
-  const text = String(value ?? "");
-  if (/[",\n]/.test(text)) {
-    return `"${text.replace(/"/g, "\"\"")}"`;
-  }
-  return text;
-}
-
 function buildExportRow(data) {
   const totalMinutes = getWorkedMinutes(data.clockIn, data.clockOut, data.breakMinutes);
   return {
-    title: data.title || "",
-    date: formatDateLabel(data.date),
-    workMode: data.workMode || "",
-    clockIn: formatTime(data.clockIn, true, data.workMode),
-    clockOut: formatTime(data.clockOut, false, data.workMode),
-    breakMinutes: data.breakMinutes || "0",
-    totalHours: formatWorkedHours(totalMinutes),
-    team: data.team || "",
-    followUp: data.followUp || "",
-    updates: data.updates || "",
+    "Project Title": data.title || "",
+    Date: formatDateLabel(data.date),
+    "Work Mode": data.workMode || "",
+    "Clock In": formatTime(data.clockIn, true, data.workMode),
+    "Clock Out": formatTime(data.clockOut, false, data.workMode),
+    "Break Minutes": data.breakMinutes || "0",
+    "Total Hours": formatWorkedHours(totalMinutes),
+    Team: data.team || "",
+    "Planned Or Follow Up Details": data.followUp || "",
+    "Update On Outcomes": data.updates || "",
   };
 }
 
@@ -208,6 +202,12 @@ function updateAdminUi() {
   adminStatus.textContent = loggedIn
     ? "Admin access enabled. You can now delete records and clear history."
     : "Admin access is required to delete records or clear history.";
+}
+
+function setEditingState(record) {
+  currentRecordId = record ? record.id : null;
+  editStatus.textContent = record ? "Editing Saved Record" : "New Record";
+  saveRecordBtn.textContent = record ? "Update Record" : "Save Record";
 }
 
 function getHistoryLabel(record) {
@@ -255,6 +255,7 @@ function fillForm(record) {
   breakMinutesInput.value = mapped.breakMinutes === null ? "" : mapped.breakMinutes;
   followUpInput.value = mapped.followUp;
   updatesInput.value = mapped.updates;
+  setEditingState(record);
   updatePreview();
 }
 
@@ -305,29 +306,39 @@ async function saveRecordToSupabase() {
   if (!data.date) {
     saveRecordBtn.textContent = "Select date first";
     window.setTimeout(() => {
-      saveRecordBtn.textContent = "Save Record";
+      saveRecordBtn.textContent = currentRecordId ? "Update Record" : "Save Record";
     }, 1500);
     return;
   }
 
   const payload = mapFormToRecord(data);
+  let query;
 
-  const { error } = await supabaseClient
-    .from(TABLE_NAME)
-    .upsert(payload, { onConflict: "work_date" });
+  if (currentRecordId) {
+    query = supabaseClient
+      .from(TABLE_NAME)
+      .update(payload)
+      .eq("id", currentRecordId);
+  } else {
+    query = supabaseClient
+      .from(TABLE_NAME)
+      .insert(payload);
+  }
+
+  const { error } = await query;
 
   if (error) {
     saveRecordBtn.textContent = "Save failed";
     adminStatus.textContent = `Supabase save error: ${error.message}`;
     window.setTimeout(() => {
-      saveRecordBtn.textContent = "Save Record";
+      saveRecordBtn.textContent = currentRecordId ? "Update Record" : "Save Record";
     }, 1500);
     return;
   }
 
-  saveRecordBtn.textContent = "Saved";
+  saveRecordBtn.textContent = currentRecordId ? "Updated" : "Saved";
   window.setTimeout(() => {
-    saveRecordBtn.textContent = "Save Record";
+    saveRecordBtn.textContent = currentRecordId ? "Update Record" : "Save Record";
   }, 1500);
 
   await loadHistoryFromSupabase();
@@ -347,6 +358,10 @@ async function deleteHistoryItem(id) {
   if (error) {
     adminStatus.textContent = `Supabase delete error: ${error.message}`;
     return;
+  }
+
+  if (currentRecordId === id) {
+    clearForm();
   }
 
   await loadHistoryFromSupabase();
@@ -380,6 +395,12 @@ function renderHistory() {
     const actions = document.createElement("div");
     actions.className = "history-actions";
 
+    const editButton = document.createElement("button");
+    editButton.type = "button";
+    editButton.className = "small-button";
+    editButton.textContent = "Edit";
+    editButton.addEventListener("click", () => fillForm(record));
+
     const loadButton = document.createElement("button");
     loadButton.type = "button";
     loadButton.className = "small-button";
@@ -393,6 +414,7 @@ function renderHistory() {
     removeButton.hidden = !isAdmin();
     removeButton.addEventListener("click", () => deleteHistoryItem(record.id));
 
+    actions.appendChild(editButton);
     actions.appendChild(loadButton);
     actions.appendChild(removeButton);
     item.appendChild(content);
@@ -411,6 +433,7 @@ function clearForm() {
   breakMinutesInput.value = "";
   followUpInput.value = "";
   updatesInput.value = "";
+  setEditingState(null);
   updatePreview();
 
   clearFormBtn.textContent = "Cleared";
@@ -477,54 +500,18 @@ function copyReport() {
   });
 }
 
-function exportRowsAsCsv(headers, rows, fileName) {
-  const csv = [
-    headers.map(escapeCsv).join(","),
-    ...rows.map((row) => row.map(escapeCsv).join(",")),
-    "",
-  ].join("\n");
-
-  const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
-  const url = URL.createObjectURL(blob);
-  const link = document.createElement("a");
-
-  link.href = url;
-  link.download = fileName;
-  document.body.appendChild(link);
-  link.click();
-  document.body.removeChild(link);
-  URL.revokeObjectURL(url);
+function exportRowsAsXlsx(sheetName, rows, fileName) {
+  const worksheet = window.XLSX.utils.json_to_sheet(rows);
+  const workbook = window.XLSX.utils.book_new();
+  window.XLSX.utils.book_append_sheet(workbook, worksheet, sheetName);
+  window.XLSX.writeFile(workbook, fileName);
 }
 
 function exportToExcel() {
   const data = getFormData();
   const row = buildExportRow(data);
-  const headers = [
-    "Project Title",
-    "Date",
-    "Work Mode",
-    "Clock In",
-    "Clock Out",
-    "Break Minutes",
-    "Total Hours",
-    "Team",
-    "Planned Or Follow Up Details",
-    "Update On Outcomes",
-  ];
-  const values = [
-    row.title,
-    row.date,
-    row.workMode,
-    row.clockIn,
-    row.clockOut,
-    row.breakMinutes,
-    row.totalHours,
-    row.team,
-    row.followUp,
-    row.updates,
-  ];
 
-  exportRowsAsCsv(headers, [values], `${sanitizeFileName(data.title)}-${data.date || "report"}.csv`);
+  exportRowsAsXlsx("Current Record", [row], `${sanitizeFileName(data.title)}-${data.date || "report"}.xlsx`);
 
   exportBtn.textContent = "Exported";
   window.setTimeout(() => {
@@ -541,39 +528,12 @@ function exportHistoryToExcel() {
     return;
   }
 
-  const headers = [
-    "Project Title",
-    "Date",
-    "Work Mode",
-    "Clock In",
-    "Clock Out",
-    "Break Minutes",
-    "Total Hours",
-    "Team",
-    "Planned Or Follow Up Details",
-    "Update On Outcomes",
-  ];
-
   const rows = historyRecords
     .slice()
     .sort((a, b) => (a.work_date || "").localeCompare(b.work_date || ""))
-    .map((record) => {
-      const row = buildExportRow(mapRecordToForm(record));
-      return [
-        row.title,
-        row.date,
-        row.workMode,
-        row.clockIn,
-        row.clockOut,
-        row.breakMinutes,
-        row.totalHours,
-        row.team,
-        row.followUp,
-        row.updates,
-      ];
-    });
+    .map((record) => buildExportRow(mapRecordToForm(record)));
 
-  exportRowsAsCsv(headers, rows, "attendance-history.csv");
+  exportRowsAsXlsx("Attendance History", rows, "attendance-history.xlsx");
 
   exportHistoryBtn.textContent = "Exported";
   window.setTimeout(() => {
@@ -598,6 +558,7 @@ async function clearAllHistory() {
   }
 
   adminStatus.textContent = "History cleared.";
+  clearForm();
   await loadHistoryFromSupabase();
 }
 
@@ -614,6 +575,7 @@ form.addEventListener("input", updatePreview);
 titleInput.addEventListener("input", updatePreview);
 
 setTodayDate();
+setEditingState(null);
 updateClock();
 updateAdminUi();
 updatePreview();
