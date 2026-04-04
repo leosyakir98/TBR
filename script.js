@@ -351,7 +351,7 @@ function clearForm() {
   workModeInput.value = "remote/field";
   clockInInput.value = "";
   clockOutInput.value = "";
-  breakMinutesInput.value = "60";
+  breakMinutesInput.value = "";
   followUpInput.value = "";
   updatesInput.value = "";
   updatePreview();

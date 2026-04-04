@@ -31,14 +31,14 @@
         </div>
 
         <div class="quick-actions">
-          <button class="action-button primary" id="clock-in-btn" type="button">Clock In Now</button>
-          <button class="action-button secondary" id="clock-out-btn" type="button">Clock Out Now</button>
+          <button class="action-button primary" id="clock-in-btn" type="button">Clock In Time</button>
+          <button class="action-button secondary" id="clock-out-btn" type="button">Clock Out Time</button>
         </div>
 
         <form id="report-form" class="editor-grid">
           <label class="full-width">
             <span>Project title</span>
-            <input id="title" name="title" type="text" value="Ulu Jelai FR Project">
+            <input id="title" name="title" type="text" value="">
           </label>
 
           <label>
@@ -48,7 +48,7 @@
 
           <label>
             <span>Team</span>
-            <input id="team" name="team" type="text" value="Syakir">
+            <input id="team" name="team" type="text" value="">
           </label>
 
           <label>
@@ -73,21 +73,17 @@
 
           <label>
             <span>Break minutes</span>
-            <input id="break-minutes" name="breakMinutes" type="number" min="0" step="5" value="60">
+            <input id="break-minutes" name="breakMinutes" type="number" min="0" step="5" value="">
           </label>
 
           <label class="full-width">
             <span>Planned or follow-up details</span>
-            <textarea id="follow-up" name="followUp" rows="5">1) visited site and reviewed current FR information
-2) followed up pending email with stakeholders
-3) continued drafting formal letter for review</textarea>
+            <textarea id="follow-up" name="followUp" rows="5"></textarea>
           </label>
 
           <label class="full-width">
             <span>Update on outcomes</span>
-            <textarea id="updates" name="updates" rows="5">1) site information gathered successfully
-2) received response from stakeholder email
-3) formal letter draft almost complete (awaiting semakan)</textarea>
+            <textarea id="updates" name="updates" rows="5"></textarea>
           </label>
         </form>
       </section>
@@ -117,7 +113,7 @@
           <div class="report-card-header">
             <div>
               <p class="report-card-kicker">Generated report</p>
-              <h3 id="report-title">Ulu Jelai FR Project</h3>
+              <h3 id="report-title">Untitled Project</h3>
             </div>
           </div>
           <pre class="report-output" id="preview-text"></pre>
