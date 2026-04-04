@@ -40,6 +40,7 @@ const ADMIN_PASSWORD = "HSUJ";
 
 const supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 let historyRecords = [];
+let historyChannel = null;
 
 function pad(value) {
   return String(value).padStart(2, "0");
@@ -273,6 +274,29 @@ async function loadHistoryFromSupabase() {
 
   historyRecords = data || [];
   renderHistory();
+}
+
+function subscribeToHistoryChanges() {
+  if (historyChannel) {
+    supabaseClient.removeChannel(historyChannel);
+  }
+
+  historyChannel = supabaseClient
+    .channel("attendance-records-realtime")
+    .on(
+      "postgres_changes",
+      { event: "*", schema: "public", table: TABLE_NAME },
+      async () => {
+        await loadHistoryFromSupabase();
+      }
+    )
+    .subscribe((status) => {
+      if (status === "SUBSCRIBED") {
+        adminStatus.textContent = isAdmin()
+          ? "Admin access enabled. Realtime sync is active."
+          : "Realtime sync is active. Refresh is no longer needed.";
+      }
+    });
 }
 
 async function saveRecordToSupabase() {
@@ -594,4 +618,5 @@ updateClock();
 updateAdminUi();
 updatePreview();
 loadHistoryFromSupabase();
+subscribeToHistoryChanges();
 window.setInterval(updateClock, 1000);
