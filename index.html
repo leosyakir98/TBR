@@ -15,7 +15,7 @@
       <div>
         <p class="eyebrow">Attendance Tracker</p>
         <h1>Track multiple work sessions in one day.</h1>
-        <p class="lede">Save one daily record per date, even if you clock in and out several times. Shared history syncs through Supabase.</p>
+        <p class="lede">Save one record per date, but let every session keep its own plan and outcome update.</p>
       </div>
       <div class="hero-clock-card">
         <p class="hero-clock-label">Current time</p>
@@ -27,13 +27,13 @@
       <section class="panel form-panel">
         <div class="panel-heading">
           <h2>Daily Input</h2>
-          <p>Use one record per date and add as many work sessions as needed.</p>
+          <p>Use one date, then add as many sessions as needed.</p>
         </div>
 
         <form id="report-form" class="editor-grid">
           <label class="full-width">
             <span>Project title</span>
-            <input id="title" name="title" type="text" value="">
+            <input id="title" name="title" type="text">
           </label>
 
           <label>
@@ -43,7 +43,7 @@
 
           <label>
             <span>Team</span>
-            <input id="team" name="team" type="text" value="">
+            <input id="team" name="team" type="text">
           </label>
 
           <label class="full-width">
@@ -60,29 +60,19 @@
             <div class="session-header">
               <div>
                 <h3>Work Sessions</h3>
-                <p>Add one session for each clock in / clock out block in the same day.</p>
+                <p>Add one session for each clock in and clock out block.</p>
               </div>
               <button class="action-button secondary" id="add-session-btn" type="button">Add Session</button>
             </div>
             <div class="session-list" id="session-list"></div>
           </section>
-
-          <label class="full-width">
-            <span>Planned or follow-up details</span>
-            <textarea id="follow-up" name="followUp" rows="5"></textarea>
-          </label>
-
-          <label class="full-width">
-            <span>Update on outcomes</span>
-            <textarea id="updates" name="updates" rows="5"></textarea>
-          </label>
         </form>
       </section>
 
       <section class="panel report-panel">
         <div class="panel-heading">
           <h2>Daily Summary</h2>
-          <p>Review the combined total for all sessions on the selected date.</p>
+          <p>The preview groups all sessions under the same date.</p>
         </div>
 
         <div class="stats-grid">
@@ -95,7 +85,7 @@
             <p class="stat-value" id="preview-day">Today</p>
           </article>
           <article class="stat-card">
-            <p class="stat-label">Sessions</p>
+            <p class="stat-label">Session count</p>
             <p class="stat-value" id="session-count">1</p>
           </article>
         </div>
@@ -125,7 +115,7 @@
       <div class="panel-heading history-heading">
         <div>
           <h2>Saved History</h2>
-          <p>One saved record per date. Editing the same date updates that day's record.</p>
+          <p>One saved row per date. Saving the same date updates that row.</p>
         </div>
         <div class="admin-tools">
           <button class="action-button ghost" id="admin-toggle-btn" type="button">Admin Login</button>
