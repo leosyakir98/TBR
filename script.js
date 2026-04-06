@@ -3,8 +3,6 @@ const titleInput = document.getElementById("title");
 const dateInput = document.getElementById("date");
 const teamInput = document.getElementById("team");
 const workModeInput = document.getElementById("work-mode");
-const followUpInput = document.getElementById("follow-up");
-const updatesInput = document.getElementById("updates");
 const sessionList = document.getElementById("session-list");
 const addSessionBtn = document.getElementById("add-session-btn");
 
@@ -47,18 +45,27 @@ let historyRecords = [];
 let historyChannel = null;
 let currentRecordId = null;
 
+function createId() {
+  if (window.crypto && typeof window.crypto.randomUUID === "function") {
+    return window.crypto.randomUUID();
+  }
+
+  return `session-${Date.now()}-${Math.random().toString(16).slice(2)}`;
+}
+
 function createSession(session = {}) {
   return {
-    id: crypto.randomUUID(),
+    id: session.id || createId(),
     clockIn: session.clockIn || session.clock_in || "",
     clockOut: session.clockOut || session.clock_out || "",
     breakMinutes: session.breakMinutes ?? session.break_minutes ?? "",
+    plan: session.plan || "",
+    update: session.update || ""
   };
 }
 
 function bindEvent(element, eventName, handler) {
   if (!element) {
-    console.warn(`Missing element for ${eventName} binding.`);
     return;
   }
 
@@ -84,7 +91,7 @@ function updateClock() {
   liveTime.textContent = new Date().toLocaleTimeString([], {
     hour: "2-digit",
     minute: "2-digit",
-    second: "2-digit",
+    second: "2-digit"
   });
 }
 
@@ -95,6 +102,7 @@ function formatDateLabel(dateValue) {
 
   const [year, month, day] = dateValue.split("-").map(Number);
   const date = new Date(year, month - 1, day);
+
   const ordinal = day % 10 === 1 && day !== 11
     ? "st"
     : day % 10 === 2 && day !== 12
@@ -116,9 +124,9 @@ function formatTime(value, includeMode, workMode) {
   const minutes = Number(minutesRaw);
   const suffix = hours >= 12 ? "pm" : "am";
   const normalizedHour = hours % 12 || 12;
-  const timeText = `${normalizedHour}.${pad(minutes)} ${suffix}`;
+  const text = `${normalizedHour}.${pad(minutes)} ${suffix}`;
 
-  return includeMode && workMode ? `${timeText} (${workMode})` : timeText;
+  return includeMode && workMode ? `${text} (${workMode})` : text;
 }
 
 function getWorkedMinutes(clockIn, clockOut, breakMinutes) {
@@ -128,6 +136,7 @@ function getWorkedMinutes(clockIn, clockOut, breakMinutes) {
 
   const [inHour, inMinute] = clockIn.split(":").map(Number);
   const [outHour, outMinute] = clockOut.split(":").map(Number);
+
   let total = (outHour * 60 + outMinute) - (inHour * 60 + inMinute);
 
   if (total < 0) {
@@ -137,8 +146,8 @@ function getWorkedMinutes(clockIn, clockOut, breakMinutes) {
   return Math.max(total - Number(breakMinutes || 0), 0);
 }
 
-function getTotalWorkedMinutes(sessionItems) {
-  return sessionItems.reduce((sum, session) => {
+function getTotalWorkedMinutes(items) {
+  return items.reduce((sum, session) => {
     return sum + getWorkedMinutes(session.clockIn, session.clockOut, session.breakMinutes);
   }, 0);
 }
@@ -146,35 +155,37 @@ function getTotalWorkedMinutes(sessionItems) {
 function formatWorkedHours(totalMinutes) {
   const hours = Math.floor(totalMinutes / 60);
   const minutes = totalMinutes % 60;
-  return minutes === 0 ? `${hours} hours` : `${hours} hours ${minutes} minutes`;
+
+  if (minutes === 0) {
+    return `${hours} hours`;
+  }
+
+  return `${hours} hours ${minutes} minutes`;
 }
 
 function getFormData() {
   return {
-    title: titleInput ? titleInput.value.trim() : "",
-    date: dateInput ? dateInput.value : "",
-    team: teamInput ? teamInput.value.trim() : "",
-    workMode: workModeInput ? workModeInput.value : "",
-    followUp: followUpInput ? followUpInput.value.trim() : "",
-    updates: updatesInput ? updatesInput.value.trim() : "",
+    title: titleInput.value.trim(),
+    date: dateInput.value,
+    team: teamInput.value.trim(),
+    workMode: workModeInput.value,
     sessions: sessions.map((session) => ({
       clockIn: session.clockIn,
       clockOut: session.clockOut,
       breakMinutes: session.breakMinutes === "" ? "" : Number(session.breakMinutes),
-    })),
+      plan: session.plan.trim(),
+      update: session.update.trim()
+    }))
   };
 }
 
 function renderSessions() {
-  if (!sessionList) {
-    return;
-  }
-
   sessionList.innerHTML = "";
 
   sessions.forEach((session, index) => {
     const card = document.createElement("article");
     card.className = "session-card";
+
     card.innerHTML = `
       <div class="session-card-header">
         <div>
@@ -183,34 +194,54 @@ function renderSessions() {
         </div>
         <button class="small-button" type="button" data-action="remove-session" data-session-id="${session.id}" ${sessions.length === 1 ? "disabled" : ""}>Remove</button>
       </div>
+
       <div class="session-grid">
         <label>
           <span>Clock in</span>
           <input type="time" data-field="clockIn" data-session-id="${session.id}" value="${session.clockIn}">
         </label>
+
         <label>
           <span>Clock out</span>
           <input type="time" data-field="clockOut" data-session-id="${session.id}" value="${session.clockOut}">
         </label>
+
         <label>
           <span>Break minutes</span>
           <input type="number" min="0" step="5" data-field="breakMinutes" data-session-id="${session.id}" value="${session.breakMinutes}">
         </label>
       </div>
+
+      <div class="session-notes">
+        <label>
+          <span>Plan / follow-up for this session</span>
+          <textarea rows="4" data-field="plan" data-session-id="${session.id}">${session.plan}</textarea>
+        </label>
+
+        <label>
+          <span>Update on outcomes for this session</span>
+          <textarea rows="4" data-field="update" data-session-id="${session.id}">${session.update}</textarea>
+        </label>
+      </div>
     `;
+
     sessionList.appendChild(card);
   });
 
-  if (sessionCount) {
-    sessionCount.textContent = String(sessions.length);
-  }
+  sessionCount.textContent = String(sessions.length);
 }
 
 function buildReportText(data) {
   const totalMinutes = getTotalWorkedMinutes(data.sessions);
+
   const sessionLines = data.sessions.map((session, index) => {
-    const minutes = getWorkedMinutes(session.clockIn, session.clockOut, session.breakMinutes);
-    return `Session ${index + 1}: ${formatTime(session.clockIn, index === 0, data.workMode)} to ${formatTime(session.clockOut, false, data.workMode)} | Break ${session.breakMinutes || 0} min | ${formatWorkedHours(minutes)}`;
+    const sessionMinutes = getWorkedMinutes(session.clockIn, session.clockOut, session.breakMinutes);
+
+    return [
+      `Session ${index + 1}: ${formatTime(session.clockIn, index === 0, data.workMode)} to ${formatTime(session.clockOut, false, data.workMode)} | Break ${session.breakMinutes || 0} min | ${formatWorkedHours(sessionMinutes)}`,
+      `Plan / follow-up: ${session.plan || "-"}`,
+      `Update on outcomes: ${session.update || "-"}`
+    ].join("\n");
   });
 
   return [
@@ -219,83 +250,62 @@ function buildReportText(data) {
     `Team: ${data.team || "-"}`,
     "",
     "Sessions:",
-    sessionLines.length ? sessionLines.join("\n") : "-",
-    "",
-    "Planned / follow-up details:",
-    data.followUp || "-",
-    "",
-    "Update on outcomes:",
-    data.updates || "-",
+    sessionLines.length ? sessionLines.join("\n\n") : "-"
   ].join("\n");
 }
 
 function updatePreview() {
   const data = getFormData();
 
-  if (reportTitle) {
-    reportTitle.textContent = data.title || "Untitled Project";
-  }
-
-  if (previewText) {
-    previewText.textContent = buildReportText(data);
-  }
-
-  if (hoursOutput) {
-    hoursOutput.textContent = formatWorkedHours(getTotalWorkedMinutes(data.sessions));
-  }
-
-  if (previewDay) {
-    previewDay.textContent = data.date
-      ? new Date(`${data.date}T00:00:00`).toLocaleDateString("en-US", { weekday: "long" })
-      : "Today";
-  }
+  reportTitle.textContent = data.title || "Untitled Project";
+  previewText.textContent = buildReportText(data);
+  hoursOutput.textContent = formatWorkedHours(getTotalWorkedMinutes(data.sessions));
+  previewDay.textContent = data.date
+    ? new Date(`${data.date}T00:00:00`).toLocaleDateString("en-US", { weekday: "long" })
+    : "Today";
 }
 
 function isAdmin() {
   return localStorage.getItem(ADMIN_STATE_KEY) === "true";
 }
 
-function setAdminState(isLoggedIn) {
-  localStorage.setItem(ADMIN_STATE_KEY, String(isLoggedIn));
+function setAdminState(value) {
+  localStorage.setItem(ADMIN_STATE_KEY, String(value));
   updateAdminUi();
 }
 
 function updateAdminUi() {
   const loggedIn = isAdmin();
 
-  document.querySelectorAll(".admin-only").forEach((item) => {
-    item.hidden = !loggedIn;
+  document.querySelectorAll(".admin-only").forEach((node) => {
+    node.hidden = !loggedIn;
   });
 
-  if (adminToggleBtn) {
-    adminToggleBtn.textContent = loggedIn ? "Admin Active" : "Admin Login";
-  }
+  adminToggleBtn.textContent = loggedIn ? "Admin Active" : "Admin Login";
+  adminLoginBtn.hidden = loggedIn;
+  adminLogoutBtn.hidden = !loggedIn;
 
-  if (adminLoginBtn) {
-    adminLoginBtn.hidden = loggedIn;
-  }
-
-  if (adminLogoutBtn) {
-    adminLogoutBtn.hidden = !loggedIn;
-  }
-
-  if (adminStatus) {
+  if (!adminStatus.dataset.messageLocked) {
     adminStatus.textContent = loggedIn
       ? "Admin access enabled. You can now delete records and clear history."
       : "Admin access is required to delete records or clear history.";
   }
 }
 
+function setStatusMessage(message) {
+  adminStatus.dataset.messageLocked = "true";
+  adminStatus.textContent = message;
+
+  window.setTimeout(() => {
+    delete adminStatus.dataset.messageLocked;
+    updateAdminUi();
+  }, 2000);
+}
+
 function setEditingState(record) {
   currentRecordId = record ? record.id : null;
-
-  if (editStatus) {
-    editStatus.textContent = record ? "Editing Saved Record" : "New Record";
-  }
-
-  if (saveRecordBtn) {
-    saveRecordBtn.textContent = record ? "Update Record" : "Save Record";
-  }
+  editStatus.textContent = record ? "Editing Saved Record" : "New Record";
+  saveRecordBtn.textContent = record ? "Update Record" : "Save Record";
 }
 
 function mapFormToRecord(data) {
@@ -311,9 +321,9 @@ function mapFormToRecord(data) {
     clock_in: firstSession.clockIn || null,
     clock_out: lastSession.clockOut || null,
     break_minutes: totalBreakMinutes || null,
-    follow_up: data.followUp || "",
-    updates: data.updates || "",
-    sessions: data.sessions,
+    follow_up: data.sessions.map((session, index) => `Session ${index + 1}: ${session.plan || "-"}`).join("\n\n"),
+    updates: data.sessions.map((session, index) => `Session ${index + 1}: ${session.update || "-"}`).join("\n\n"),
+    sessions: data.sessions
   };
 }
 
@@ -324,6 +334,8 @@ function mapRecordToForm(record) {
         clockIn: record.clock_in,
         clockOut: record.clock_out,
         breakMinutes: record.break_minutes,
+        plan: "",
+        update: ""
       })];
 
   return {
@@ -332,40 +344,19 @@ function mapRecordToForm(record) {
     date: record.work_date || "",
     team: record.team || "",
     workMode: record.work_mode || "remote/field",
-    followUp: record.follow_up || "",
-    updates: record.updates || "",
-    sessions: mappedSessions,
+    sessions: mappedSessions
   };
 }
 
 function fillForm(record) {
   const mapped = mapRecordToForm(record);
 
-  if (titleInput) {
-    titleInput.value = mapped.title;
-  }
-
-  if (dateInput) {
-    dateInput.value = mapped.date;
-  }
-
-  if (teamInput) {
-    teamInput.value = mapped.team;
-  }
-
-  if (workModeInput) {
-    workModeInput.value = mapped.workMode;
-  }
-
-  if (followUpInput) {
-    followUpInput.value = mapped.followUp;
-  }
-
-  if (updatesInput) {
-    updatesInput.value = mapped.updates;
-  }
-
+  titleInput.value = mapped.title;
+  dateInput.value = mapped.date;
+  teamInput.value = mapped.team;
+  workModeInput.value = mapped.workMode;
   sessions = mapped.sessions;
+
   renderSessions();
   setEditingState(record);
   updatePreview();
@@ -384,11 +375,9 @@ async function loadHistoryFromSupabase() {
     .order("created_at", { ascending: false });
 
   if (error) {
-    if (adminStatus) {
-      adminStatus.textContent = `Supabase load error: ${error.message}`;
-    }
     historyRecords = [];
     renderHistory();
+    setStatusMessage(`Supabase load error: ${error.message}`);
     return;
   }
 
@@ -413,58 +402,43 @@ async function saveRecordToSupabase() {
   const data = getFormData();
 
   if (!data.date) {
-    if (saveRecordBtn) {
-      saveRecordBtn.textContent = "Select date first";
-      window.setTimeout(() => {
-        saveRecordBtn.textContent = currentRecordId ? "Update Record" : "Save Record";
-      }, 1500);
-    }
+    const original = saveRecordBtn.textContent;
+    saveRecordBtn.textContent = "Select date first";
+    window.setTimeout(() => {
+      saveRecordBtn.textContent = currentRecordId ? "Update Record" : original;
+    }, 1500);
     return;
   }
 
   const payload = mapFormToRecord(data);
+
   const result = currentRecordId
     ? await supabaseClient.from(TABLE_NAME).update(payload).eq("id", currentRecordId)
     : await supabaseClient.from(TABLE_NAME).upsert(payload, { onConflict: "work_date" });
 
   if (result.error) {
-    if (saveRecordBtn) {
-      saveRecordBtn.textContent = "Save failed";
-      window.setTimeout(() => {
-        saveRecordBtn.textContent = currentRecordId ? "Update Record" : "Save Record";
-      }, 1500);
-    }
-
-    if (adminStatus) {
-      adminStatus.textContent = `Supabase save error: ${result.error.message}`;
-    }
+    setStatusMessage(`Supabase save error: ${result.error.message}`);
     return;
   }
 
-  if (saveRecordBtn) {
-    saveRecordBtn.textContent = currentRecordId ? "Updated" : "Saved";
-    window.setTimeout(() => {
-      saveRecordBtn.textContent = currentRecordId ? "Update Record" : "Save Record";
-    }, 1500);
-  }
+  saveRecordBtn.textContent = currentRecordId ? "Updated" : "Saved";
+  window.setTimeout(() => {
+    saveRecordBtn.textContent = currentRecordId ? "Update Record" : "Save Record";
+  }, 1500);
 
   await loadHistoryFromSupabase();
 }
 
 async function deleteHistoryItem(id) {
   if (!isAdmin()) {
-    if (adminStatus) {
-      adminStatus.textContent = "Admin login required to delete records.";
-    }
+    setStatusMessage("Admin login required to delete records.");
     return;
   }
 
   const { error } = await supabaseClient.from(TABLE_NAME).delete().eq("id", id);
 
   if (error) {
-    if (adminStatus) {
-      adminStatus.textContent = `Supabase delete error: ${error.message}`;
-    }
+    setStatusMessage(`Supabase delete error: ${error.message}`);
     return;
   }
 
@@ -476,36 +450,29 @@ async function deleteHistoryItem(id) {
 }
 
 function renderHistory() {
-  if (!historyList) {
-    return;
-  }
-
   historyList.innerHTML = "";
 
   if (historyRecords.length === 0) {
-    if (historyEmpty) {
-      historyEmpty.hidden = false;
-      historyList.appendChild(historyEmpty);
-    }
+    historyEmpty.hidden = false;
+    historyList.appendChild(historyEmpty);
     return;
   }
 
-  if (historyEmpty) {
-    historyEmpty.hidden = true;
-  }
+  historyEmpty.hidden = true;
 
   historyRecords.forEach((record) => {
     const item = document.createElement("article");
     item.className = "history-item";
 
     const content = document.createElement("div");
-    const title = document.createElement("h3");
-    title.textContent = record.project_title || "Untitled Project";
+    const heading = document.createElement("h3");
+    heading.textContent = record.project_title || "Untitled Project";
+
     const meta = document.createElement("p");
     meta.className = "history-meta";
     meta.textContent = getHistoryLabel(record);
 
-    content.appendChild(title);
+    content.appendChild(heading);
     content.appendChild(meta);
 
     const actions = document.createElement("div");
@@ -526,31 +493,19 @@ function renderHistory() {
 
     actions.appendChild(editButton);
     actions.appendChild(deleteButton);
+
     item.appendChild(content);
     item.appendChild(actions);
+
     historyList.appendChild(item);
   });
 }
 
 function clearForm() {
-  if (titleInput) {
-    titleInput.value = "";
-  }
-  if (dateInput) {
-    dateInput.value = "";
-  }
-  if (teamInput) {
-    teamInput.value = "";
-  }
-  if (workModeInput) {
-    workModeInput.value = "remote/field";
-  }
-  if (followUpInput) {
-    followUpInput.value = "";
-  }
-  if (updatesInput) {
-    updatesInput.value = "";
-  }
+  titleInput.value = "";
+  dateInput.value = "";
+  teamInput.value = "";
+  workModeInput.value = "remote/field";
 
   sessions = [createSession()];
   renderSessions();
@@ -559,46 +514,30 @@ function clearForm() {
 }
 
 function toggleAdminPanel() {
-  if (!adminPanel) {
-    return;
-  }
-
   adminPanel.hidden = !adminPanel.hidden;
 }
 
 function loginAdmin() {
-  const username = adminUsernameInput ? adminUsernameInput.value.trim() : "";
-  const password = adminPasswordInput ? adminPasswordInput.value : "";
+  const username = adminUsernameInput.value.trim();
+  const password = adminPasswordInput.value;
 
   if (username === ADMIN_USERNAME && password === ADMIN_PASSWORD) {
     setAdminState(true);
-    if (adminStatus) {
-      adminStatus.textContent = "Admin login successful.";
-    }
-    if (adminPasswordInput) {
-      adminPasswordInput.value = "";
-    }
+    adminPasswordInput.value = "";
+    setStatusMessage("Admin login successful.");
     renderHistory();
     return;
   }
 
   setAdminState(false);
-  if (adminStatus) {
-    adminStatus.textContent = "Invalid admin username or password.";
-  }
+  setStatusMessage("Invalid admin username or password.");
 }
 
 function logoutAdmin() {
   setAdminState(false);
-  if (adminUsernameInput) {
-    adminUsernameInput.value = "";
-  }
-  if (adminPasswordInput) {
-    adminPasswordInput.value = "";
-  }
-  if (adminStatus) {
-    adminStatus.textContent = "Admin logged out.";
-  }
+  adminUsernameInput.value = "";
+  adminPasswordInput.value = "";
+  setStatusMessage("Admin logged out.");
   renderHistory();
 }
 
@@ -610,9 +549,15 @@ function buildExportRow(data) {
     "Work Mode": data.workMode || "",
     Sessions: data.sessions.length,
     "Total Hours": formatWorkedHours(getTotalWorkedMinutes(data.sessions)),
-    "Session Details": data.sessions.map((session, index) => `S${index + 1}: ${session.clockIn || "-"}-${session.clockOut || "-"} (${session.breakMinutes || 0} min break)`).join(" | "),
-    "Planned Or Follow Up Details": data.followUp || "",
-    "Update On Outcomes": data.updates || "",
+    "Session Details": data.sessions.map((session, index) => {
+      return [
+        `Session ${index + 1}`,
+        `Time: ${session.clockIn || "-"} - ${session.clockOut || "-"}`,
+        `Break: ${session.breakMinutes || 0} min`,
+        `Plan: ${session.plan || "-"}`,
+        `Update: ${session.update || "-"}`
+      ].join(" | ");
+    }).join(" || ")
   };
 }
 
@@ -629,12 +574,10 @@ function exportToExcel() {
 
 function exportHistoryToExcel() {
   if (historyRecords.length === 0) {
-    if (exportHistoryBtn) {
-      exportHistoryBtn.textContent = "No history";
-      window.setTimeout(() => {
-        exportHistoryBtn.textContent = "Export Full History";
-      }, 1500);
-    }
+    exportHistoryBtn.textContent = "No history";
+    window.setTimeout(() => {
+      exportHistoryBtn.textContent = "Export Full History";
+    }, 1500);
     return;
   }
 
@@ -648,25 +591,18 @@ function exportHistoryToExcel() {
 
 async function clearAllHistory() {
   if (!isAdmin()) {
-    if (adminStatus) {
-      adminStatus.textContent = "Admin login required to clear history.";
-    }
+    setStatusMessage("Admin login required to clear history.");
     return;
   }
 
   const { error } = await supabaseClient.from(TABLE_NAME).delete().not("id", "is", null);
 
   if (error) {
-    if (adminStatus) {
-      adminStatus.textContent = `Supabase clear error: ${error.message}`;
-    }
+    setStatusMessage(`Supabase clear error: ${error.message}`);
     return;
   }
 
-  if (adminStatus) {
-    adminStatus.textContent = "History cleared.";
-  }
-
+  setStatusMessage("History cleared.");
   clearForm();
   await loadHistoryFromSupabase();
 }
@@ -692,7 +628,7 @@ bindEvent(sessionList, "input", (event) => {
 
     return {
       ...session,
-      [field]: event.target.value,
+      [field]: event.target.value
     };
   });
 
@@ -718,9 +654,9 @@ bindEvent(sessionList, "click", (event) => {
 
 bindEvent(clearFormBtn, "click", clearForm);
 bindEvent(saveRecordBtn, "click", saveRecordToSupabase);
-bindEvent(copyBtn, "click", () => {
+bindEvent(copyBtn, "click", async () => {
   const data = getFormData();
-  navigator.clipboard.writeText(`${data.title || "Untitled Project"}\n${buildReportText(data)}`);
+  await navigator.clipboard.writeText(`${data.title || "Untitled Project"}\n${buildReportText(data)}`);
 });
 bindEvent(exportBtn, "click", exportToExcel);
 bindEvent(exportHistoryBtn, "click", exportHistoryToExcel);
@@ -729,7 +665,6 @@ bindEvent(adminLoginBtn, "click", loginAdmin);
 bindEvent(adminLogoutBtn, "click", logoutAdmin);
 bindEvent(clearHistoryBtn, "click", clearAllHistory);
 bindEvent(form, "input", updatePreview);
-bindEvent(titleInput, "input", updatePreview);
 
 setTodayDate();
 sessions = [createSession()];
