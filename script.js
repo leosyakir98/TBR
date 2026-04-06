@@ -1,3 +1,4 @@
+alert("NEW SCRIPT LOADED");
 const STORAGE_KEY = "today-task-tracker-v1";
 
 const taskForm = document.getElementById("task-form");
