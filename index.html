@@ -14,8 +14,8 @@
     <section class="hero">
       <div>
         <p class="eyebrow">Attendance Tracker</p>
-        <h1>Clock in, clock out, and generate a clean daily work report.</h1>
-        <p class="lede">Use the form to record attendance, calculate total working hours, and export the report to Excel-friendly CSV.</p>
+        <h1>Track multiple work sessions in one day.</h1>
+        <p class="lede">Save one daily record per date, even if you clock in and out several times. Shared history syncs through Supabase.</p>
       </div>
       <div class="hero-clock-card">
         <p class="hero-clock-label">Current time</p>
@@ -27,7 +27,7 @@
       <section class="panel form-panel">
         <div class="panel-heading">
           <h2>Daily Input</h2>
-          <p>Fill in the attendance details for today's work.</p>
+          <p>Use one record per date and add as many work sessions as needed.</p>
         </div>
 
         <form id="report-form" class="editor-grid">
@@ -46,7 +46,7 @@
             <input id="team" name="team" type="text" value="">
           </label>
 
-          <label>
+          <label class="full-width">
             <span>Work mode</span>
             <select id="work-mode" name="workMode">
               <option value="remote/field" selected>Remote / Field</option>
@@ -56,20 +56,16 @@
             </select>
           </label>
 
-          <label>
-            <span>Clock in time</span>
-            <input id="clock-in" name="clockIn" type="time">
-          </label>
-
-          <label>
-            <span>Clock out time</span>
-            <input id="clock-out" name="clockOut" type="time">
-          </label>
-
-          <label>
-            <span>Break minutes</span>
-            <input id="break-minutes" name="breakMinutes" type="number" min="0" step="5" value="">
-          </label>
+          <section class="full-width session-section">
+            <div class="session-header">
+              <div>
+                <h3>Work Sessions</h3>
+                <p>Add one session for each clock in / clock out block in the same day.</p>
+              </div>
+              <button class="action-button secondary" id="add-session-btn" type="button">Add Session</button>
+            </div>
+            <div class="session-list" id="session-list"></div>
+          </section>
 
           <label class="full-width">
             <span>Planned or follow-up details</span>
@@ -86,7 +82,7 @@
       <section class="panel report-panel">
         <div class="panel-heading">
           <h2>Daily Summary</h2>
-          <p>Review the generated report before copying or exporting it.</p>
+          <p>Review the combined total for all sessions on the selected date.</p>
         </div>
 
         <div class="stats-grid">
@@ -99,8 +95,8 @@
             <p class="stat-value" id="preview-day">Today</p>
           </article>
           <article class="stat-card">
-            <p class="stat-label">Last activity</p>
-            <p class="stat-value" id="preview-meta-time">--:--</p>
+            <p class="stat-label">Sessions</p>
+            <p class="stat-value" id="session-count">1</p>
           </article>
         </div>
 
@@ -129,7 +125,7 @@
       <div class="panel-heading history-heading">
         <div>
           <h2>Saved History</h2>
-          <p>Daily records are saved automatically in this browser.</p>
+          <p>One saved record per date. Editing the same date updates that day's record.</p>
         </div>
         <div class="admin-tools">
           <button class="action-button ghost" id="admin-toggle-btn" type="button">Admin Login</button>

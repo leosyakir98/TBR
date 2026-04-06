@@ -1,584 +1,331 @@
-const form = document.getElementById("report-form");
-const titleInput = document.getElementById("title");
-const previewText = document.getElementById("preview-text");
-const reportTitle = document.getElementById("report-title");
-const editStatus = document.getElementById("edit-status");
+const STORAGE_KEY = "today-task-tracker-v1";
+
+const taskForm = document.getElementById("task-form");
+const titleInput = document.getElementById("task-title");
+const priorityInput = document.getElementById("task-priority");
+const estimateInput = document.getElementById("task-estimate");
+const notesInput = document.getElementById("task-notes");
+const saveTaskBtn = document.getElementById("save-task-btn");
+const resetFormBtn = document.getElementById("reset-form-btn");
+const clearDoneBtn = document.getElementById("clear-done-btn");
+const loadStarterBtn = document.getElementById("load-starter-btn");
 const liveTime = document.getElementById("live-time");
-const hoursOutput = document.getElementById("hours-output");
-const clearFormBtn = document.getElementById("clear-form-btn");
-const saveRecordBtn = document.getElementById("save-record-btn");
-const copyBtn = document.getElementById("copy-btn");
-const exportBtn = document.getElementById("export-btn");
-const exportHistoryBtn = document.getElementById("export-history-btn");
-const clearHistoryBtn = document.getElementById("clear-history-btn");
-const adminToggleBtn = document.getElementById("admin-toggle-btn");
-const adminPanel = document.getElementById("admin-panel");
-const adminLoginBtn = document.getElementById("admin-login-btn");
-const adminLogoutBtn = document.getElementById("admin-logout-btn");
-const adminUsernameInput = document.getElementById("admin-username");
-const adminPasswordInput = document.getElementById("admin-password");
-const adminStatus = document.getElementById("admin-status");
-const previewDay = document.getElementById("preview-day");
-const previewMetaTime = document.getElementById("preview-meta-time");
-const historyList = document.getElementById("history-list");
-const historyEmpty = document.getElementById("history-empty");
+const todayDate = document.getElementById("today-date");
+const completionRate = document.getElementById("completion-rate");
+const completionCaption = document.getElementById("completion-caption");
+const openCount = document.getElementById("open-count");
+const doneCount = document.getElementById("done-count");
+const timeLeft = document.getElementById("time-left");
+const focusList = document.getElementById("focus-list");
+const taskList = document.getElementById("task-list");
+const taskEmpty = document.getElementById("task-empty");
 
-const dateInput = document.getElementById("date");
-const teamInput = document.getElementById("team");
-const workModeInput = document.getElementById("work-mode");
-const clockInInput = document.getElementById("clock-in");
-const clockOutInput = document.getElementById("clock-out");
-const breakMinutesInput = document.getElementById("break-minutes");
-const followUpInput = document.getElementById("follow-up");
-const updatesInput = document.getElementById("updates");
+let tasks = loadTasks();
+let activeFilter = "all";
+let editingTaskId = null;
 
-const SUPABASE_URL = "https://ulwnlwdjawxfmvcxfbxb.supabase.co";
-const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InVsd25sd2RqYXd4Zm12Y3hmYnhiIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzUzMTk3MDYsImV4cCI6MjA5MDg5NTcwNn0.jIM4gmyW9c0jvUmKbd78Rpsnzmy0r9RdThfFDvY7axk";
-const TABLE_NAME = "attendance_records";
-const ADMIN_STATE_KEY = "attendance-tracker-admin-state";
-const ADMIN_USERNAME = "admin";
-const ADMIN_PASSWORD = "HSUJ";
-
-const supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
-let historyRecords = [];
-let historyChannel = null;
-let currentRecordId = null;
-
-function pad(value) {
-  return String(value).padStart(2, "0");
+function loadTasks() {
+  try {
+    const saved = JSON.parse(localStorage.getItem(STORAGE_KEY) || "[]");
+    return Array.isArray(saved) ? saved : [];
+  } catch {
+    return [];
+  }
 }
 
-function setTodayDate() {
-  if (!dateInput.value) {
-    const now = new Date();
-    dateInput.value = `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}`;
-  }
+function persistTasks() {
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(tasks));
+}
+
+function formatToday() {
+  const now = new Date();
+  todayDate.textContent = now.toLocaleDateString("en-US", {
+    weekday: "long",
+    month: "long",
+    day: "numeric",
+  });
 }
 
 function updateClock() {
-  const now = new Date();
-  liveTime.textContent = now.toLocaleTimeString([], {
+  liveTime.textContent = new Date().toLocaleTimeString([], {
     hour: "2-digit",
     minute: "2-digit",
-    second: "2-digit",
   });
 }
 
-function getCurrentTimeValue() {
-  const now = new Date();
-  return `${pad(now.getHours())}:${pad(now.getMinutes())}`;
-}
-
-function formatDateLabel(dateValue) {
-  if (!dateValue) {
-    return "No date selected";
+function minutesToLabel(totalMinutes) {
+  if (totalMinutes < 60) {
+    return `${totalMinutes} min`;
   }
 
-  const [year, month, day] = dateValue.split("-").map(Number);
-  const date = new Date(year, month - 1, day);
-  const ordinal = day % 10 === 1 && day !== 11
-    ? "st"
-    : day % 10 === 2 && day !== 12
-      ? "nd"
-      : day % 10 === 3 && day !== 13
-        ? "rd"
-        : "th";
-
-  return `${day}${ordinal} ${date.toLocaleString("en-US", { month: "long" })} ${year}`;
-}
-
-function formatTime(value, includeMode, workMode) {
-  if (!value) {
-    return "-";
-  }
-
-  const [hoursRaw, minutesRaw] = value.split(":");
-  const hours = Number(hoursRaw);
-  const minutes = Number(minutesRaw);
-  const suffix = hours >= 12 ? "pm" : "am";
-  const normalizedHour = hours % 12 || 12;
-  const timeText = `${normalizedHour}.${pad(minutes)} ${suffix}`;
-
-  if (includeMode && workMode) {
-    return `${timeText} (${workMode})`;
-  }
-
-  return timeText;
-}
-
-function getWorkedMinutes(clockIn, clockOut, breakMinutes) {
-  if (!clockIn || !clockOut) {
-    return 0;
-  }
-
-  const [inHour, inMinute] = clockIn.split(":").map(Number);
-  const [outHour, outMinute] = clockOut.split(":").map(Number);
-  let total = (outHour * 60 + outMinute) - (inHour * 60 + inMinute);
-
-  if (total < 0) {
-    total += 24 * 60;
-  }
-
-  return Math.max(total - Number(breakMinutes || 0), 0);
-}
-
-function formatWorkedHours(totalMinutes) {
   const hours = Math.floor(totalMinutes / 60);
   const minutes = totalMinutes % 60;
+  return minutes ? `${hours}h ${minutes}m` : `${hours}h`;
+}
 
-  if (minutes === 0) {
-    return `${hours} hours`;
+function priorityRank(priority) {
+  return { high: 0, medium: 1, low: 2 }[priority] ?? 3;
+}
+
+function getFilteredTasks() {
+  if (activeFilter === "open") {
+    return tasks.filter((task) => !task.done);
   }
 
-  return `${hours} hours ${minutes} minutes`;
+  if (activeFilter === "done") {
+    return tasks.filter((task) => task.done);
+  }
+
+  return tasks;
 }
 
-function buildReportText(data) {
-  const totalMinutes = getWorkedMinutes(data.clockIn, data.clockOut, data.breakMinutes);
+function updateSummary() {
+  const total = tasks.length;
+  const done = tasks.filter((task) => task.done).length;
+  const open = total - done;
+  const openMinutes = tasks
+    .filter((task) => !task.done)
+    .reduce((sum, task) => sum + Number(task.estimate), 0);
+  const percent = total ? Math.round((done / total) * 100) : 0;
 
-  return [
-    `Date: ${formatDateLabel(data.date)}`,
-    `Clock in: ${formatTime(data.clockIn, true, data.workMode)}`,
-    `Clock out: ${formatTime(data.clockOut, false, data.workMode)}`,
-    `Break: ${data.breakMinutes || 0} minutes`,
-    `Total working hours: ${formatWorkedHours(totalMinutes)}`,
-    `Team: ${data.team || "-"}`,
-    "",
-    "Planned / follow-up details:",
-    data.followUp || "-",
-    "",
-    "Update on outcomes:",
-    data.updates || "-",
-  ].join("\n");
+  completionRate.textContent = `${percent}%`;
+  completionCaption.textContent = `${done} of ${total} tasks done`;
+  openCount.textContent = String(open);
+  doneCount.textContent = String(done);
+  timeLeft.textContent = minutesToLabel(openMinutes);
 }
 
-function sanitizeFileName(value) {
-  return (value || "attendance-report")
-    .replace(/[<>:"/\\|?*]+/g, "")
-    .replace(/\s+/g, "-")
-    .toLowerCase();
-}
+function updateFocusBoard() {
+  const focusTasks = tasks
+    .filter((task) => !task.done)
+    .sort((left, right) => {
+      const byPriority = priorityRank(left.priority) - priorityRank(right.priority);
+      if (byPriority !== 0) {
+        return byPriority;
+      }
+      return left.createdAt - right.createdAt;
+    })
+    .slice(0, 3);
 
-function buildExportRow(data) {
-  const totalMinutes = getWorkedMinutes(data.clockIn, data.clockOut, data.breakMinutes);
-  return {
-    "Project Title": data.title || "",
-    Date: formatDateLabel(data.date),
-    "Work Mode": data.workMode || "",
-    "Clock In": formatTime(data.clockIn, true, data.workMode),
-    "Clock Out": formatTime(data.clockOut, false, data.workMode),
-    "Break Minutes": data.breakMinutes || "0",
-    "Total Hours": formatWorkedHours(totalMinutes),
-    Team: data.team || "",
-    "Planned Or Follow Up Details": data.followUp || "",
-    "Update On Outcomes": data.updates || "",
-  };
-}
+  focusList.innerHTML = "";
 
-function getFormData() {
-  return Object.fromEntries(new FormData(form).entries());
-}
+  if (focusTasks.length === 0) {
+    focusList.innerHTML = '<p class="empty-copy">No focus tasks yet. Add a few tasks and your top priorities will appear here.</p>';
+    return;
+  }
 
-function isAdmin() {
-  return localStorage.getItem(ADMIN_STATE_KEY) === "true";
-}
-
-function setAdminState(isLoggedIn) {
-  localStorage.setItem(ADMIN_STATE_KEY, String(isLoggedIn));
-  updateAdminUi();
-}
-
-function updateAdminUi() {
-  const loggedIn = isAdmin();
-  const adminOnlyItems = document.querySelectorAll(".admin-only");
-
-  adminOnlyItems.forEach((item) => {
-    item.hidden = !loggedIn;
+  focusTasks.forEach((task, index) => {
+    const pill = document.createElement("article");
+    pill.className = "focus-pill";
+    pill.innerHTML = `
+      <strong>${index + 1}. ${escapeHtml(task.title)}</strong>
+      <span class="badge ${task.priority}">${task.priority}</span>
+      <span class="task-meta">${minutesToLabel(Number(task.estimate))}</span>
+    `;
+    focusList.appendChild(pill);
   });
-
-  adminToggleBtn.textContent = loggedIn ? "Admin Active" : "Admin Login";
-  adminLogoutBtn.hidden = !loggedIn;
-  adminLoginBtn.hidden = loggedIn;
-  adminStatus.textContent = loggedIn
-    ? "Admin access enabled. You can now delete records and clear history."
-    : "Admin access is required to delete records or clear history.";
 }
 
-function setEditingState(record) {
-  currentRecordId = record ? record.id : null;
-  editStatus.textContent = record ? "Editing Saved Record" : "New Record";
-  saveRecordBtn.textContent = record ? "Update Record" : "Save Record";
-}
-
-function getHistoryLabel(record) {
-  const totalMinutes = getWorkedMinutes(record.clock_in, record.clock_out, record.break_minutes);
-  return `${formatDateLabel(record.work_date)} | ${formatWorkedHours(totalMinutes)} | ${record.team || "No team"}`;
-}
-
-function mapRecordToForm(record) {
-  return {
-    id: record.id,
-    title: record.project_title || "",
-    date: record.work_date || "",
-    team: record.team || "",
-    workMode: record.work_mode || "remote/field",
-    clockIn: record.clock_in || "",
-    clockOut: record.clock_out || "",
-    breakMinutes: record.break_minutes ?? "",
-    followUp: record.follow_up || "",
-    updates: record.updates || "",
-  };
-}
-
-function mapFormToRecord(data) {
-  return {
-    project_title: data.title || "",
-    work_date: data.date || null,
-    team: data.team || "",
-    work_mode: data.workMode || "",
-    clock_in: data.clockIn || null,
-    clock_out: data.clockOut || null,
-    break_minutes: data.breakMinutes === "" ? null : Number(data.breakMinutes),
-    follow_up: data.followUp || "",
-    updates: data.updates || "",
-  };
-}
-
-function fillForm(record) {
-  const mapped = mapRecordToForm(record);
-  titleInput.value = mapped.title;
-  dateInput.value = mapped.date;
-  teamInput.value = mapped.team;
-  workModeInput.value = mapped.workMode || "remote/field";
-  clockInInput.value = mapped.clockIn;
-  clockOutInput.value = mapped.clockOut;
-  breakMinutesInput.value = mapped.breakMinutes === null ? "" : mapped.breakMinutes;
-  followUpInput.value = mapped.followUp;
-  updatesInput.value = mapped.updates;
-  setEditingState(record);
-  updatePreview();
-}
-
-async function loadHistoryFromSupabase() {
-  const { data, error } = await supabaseClient
-    .from(TABLE_NAME)
-    .select("*")
-    .order("work_date", { ascending: false })
-    .order("created_at", { ascending: false });
-
-  if (error) {
-    adminStatus.textContent = `Supabase load error: ${error.message}`;
-    historyRecords = [];
-    renderHistory();
-    return;
-  }
-
-  historyRecords = data || [];
-  renderHistory();
-}
-
-function subscribeToHistoryChanges() {
-  if (historyChannel) {
-    supabaseClient.removeChannel(historyChannel);
-  }
-
-  historyChannel = supabaseClient
-    .channel("attendance-records-realtime")
-    .on(
-      "postgres_changes",
-      { event: "*", schema: "public", table: TABLE_NAME },
-      async () => {
-        await loadHistoryFromSupabase();
+function renderTasks() {
+  const visibleTasks = getFilteredTasks()
+    .slice()
+    .sort((left, right) => {
+      if (left.done !== right.done) {
+        return Number(left.done) - Number(right.done);
       }
-    )
-    .subscribe((status) => {
-      if (status === "SUBSCRIBED") {
-        adminStatus.textContent = isAdmin()
-          ? "Admin access enabled. Realtime sync is active."
-          : "Realtime sync is active. Refresh is no longer needed.";
+
+      const byPriority = priorityRank(left.priority) - priorityRank(right.priority);
+      if (byPriority !== 0) {
+        return byPriority;
       }
+
+      return left.createdAt - right.createdAt;
     });
-}
 
-async function saveRecordToSupabase() {
-  const data = getFormData();
+  taskList.innerHTML = "";
+  taskEmpty.hidden = visibleTasks.length > 0;
 
-  if (!data.date) {
-    saveRecordBtn.textContent = "Select date first";
-    window.setTimeout(() => {
-      saveRecordBtn.textContent = currentRecordId ? "Update Record" : "Save Record";
-    }, 1500);
-    return;
-  }
-
-  const payload = mapFormToRecord(data);
-  let query;
-
-  if (currentRecordId) {
-    query = supabaseClient
-      .from(TABLE_NAME)
-      .update(payload)
-      .eq("id", currentRecordId);
-  } else {
-    query = supabaseClient
-      .from(TABLE_NAME)
-      .insert(payload);
-  }
-
-  const { error } = await query;
-
-  if (error) {
-    saveRecordBtn.textContent = "Save failed";
-    adminStatus.textContent = `Supabase save error: ${error.message}`;
-    window.setTimeout(() => {
-      saveRecordBtn.textContent = currentRecordId ? "Update Record" : "Save Record";
-    }, 1500);
-    return;
-  }
-
-  saveRecordBtn.textContent = currentRecordId ? "Updated" : "Saved";
-  window.setTimeout(() => {
-    saveRecordBtn.textContent = currentRecordId ? "Update Record" : "Save Record";
-  }, 1500);
-
-  await loadHistoryFromSupabase();
-}
-
-async function deleteHistoryItem(id) {
-  if (!isAdmin()) {
-    adminStatus.textContent = "Admin login required to delete records.";
-    return;
-  }
-
-  const { error } = await supabaseClient
-    .from(TABLE_NAME)
-    .delete()
-    .eq("id", id);
-
-  if (error) {
-    adminStatus.textContent = `Supabase delete error: ${error.message}`;
-    return;
-  }
-
-  if (currentRecordId === id) {
-    clearForm();
-  }
-
-  await loadHistoryFromSupabase();
-}
-
-function renderHistory() {
-  historyList.innerHTML = "";
-
-  if (historyRecords.length === 0) {
-    historyEmpty.hidden = false;
-    historyList.appendChild(historyEmpty);
-    return;
-  }
-
-  historyEmpty.hidden = true;
-
-  historyRecords.forEach((record) => {
+  visibleTasks.forEach((task) => {
     const item = document.createElement("article");
-    item.className = "history-item";
+    item.className = `task-item${task.done ? " is-done" : ""}`;
+
+    const checkbox = document.createElement("button");
+    checkbox.type = "button";
+    checkbox.className = `task-checkbox${task.done ? " is-done" : ""}`;
+    checkbox.setAttribute("aria-label", task.done ? "Mark task as open" : "Mark task as done");
+    checkbox.addEventListener("click", () => toggleTask(task.id));
 
     const content = document.createElement("div");
-    const title = document.createElement("h3");
-    title.textContent = record.project_title || "Untitled Project";
-    const meta = document.createElement("p");
-    meta.className = "history-meta";
-    meta.textContent = getHistoryLabel(record);
-
-    content.appendChild(title);
-    content.appendChild(meta);
+    content.innerHTML = `
+      <h3 class="task-title">${escapeHtml(task.title)}</h3>
+      <p class="task-meta">
+        <span class="badge ${task.priority}">${task.priority}</span>
+        ${minutesToLabel(Number(task.estimate))}
+      </p>
+      <p class="task-notes">${escapeHtml(task.notes || "No notes added.")}</p>
+    `;
 
     const actions = document.createElement("div");
-    actions.className = "history-actions";
+    actions.className = "task-actions";
 
     const editButton = document.createElement("button");
     editButton.type = "button";
     editButton.className = "small-button";
     editButton.textContent = "Edit";
-    editButton.addEventListener("click", () => fillForm(record));
+    editButton.addEventListener("click", () => loadTaskIntoForm(task.id));
 
-    const loadButton = document.createElement("button");
-    loadButton.type = "button";
-    loadButton.className = "small-button";
-    loadButton.textContent = "Load";
-    loadButton.addEventListener("click", () => fillForm(record));
+    const deleteButton = document.createElement("button");
+    deleteButton.type = "button";
+    deleteButton.className = "small-button";
+    deleteButton.textContent = "Delete";
+    deleteButton.addEventListener("click", () => deleteTask(task.id));
 
-    const removeButton = document.createElement("button");
-    removeButton.type = "button";
-    removeButton.className = "small-button admin-only";
-    removeButton.textContent = "Delete";
-    removeButton.hidden = !isAdmin();
-    removeButton.addEventListener("click", () => deleteHistoryItem(record.id));
-
-    actions.appendChild(editButton);
-    actions.appendChild(loadButton);
-    actions.appendChild(removeButton);
-    item.appendChild(content);
-    item.appendChild(actions);
-    historyList.appendChild(item);
+    actions.append(editButton, deleteButton);
+    item.append(checkbox, content, actions);
+    taskList.appendChild(item);
   });
 }
 
-function clearForm() {
-  titleInput.value = "";
-  dateInput.value = "";
-  teamInput.value = "";
-  workModeInput.value = "remote/field";
-  clockInInput.value = "";
-  clockOutInput.value = "";
-  breakMinutesInput.value = "";
-  followUpInput.value = "";
-  updatesInput.value = "";
-  setEditingState(null);
-  updatePreview();
-
-  clearFormBtn.textContent = "Cleared";
-  window.setTimeout(() => {
-    clearFormBtn.textContent = "Clear Form";
-  }, 1500);
+function refreshUi() {
+  persistTasks();
+  updateSummary();
+  updateFocusBoard();
+  renderTasks();
 }
 
-function toggleAdminPanel() {
-  adminPanel.hidden = !adminPanel.hidden;
+function resetForm() {
+  taskForm.reset();
+  priorityInput.value = "medium";
+  estimateInput.value = "30";
+  editingTaskId = null;
+  saveTaskBtn.textContent = "Add Task";
+  titleInput.focus();
 }
 
-function loginAdmin() {
-  const username = adminUsernameInput.value.trim();
-  const password = adminPasswordInput.value;
+function createTask(data) {
+  return {
+    id: crypto.randomUUID(),
+    title: data.title.trim(),
+    priority: data.priority,
+    estimate: Number(data.estimate),
+    notes: data.notes.trim(),
+    done: false,
+    createdAt: Date.now(),
+  };
+}
 
-  if (username === ADMIN_USERNAME && password === ADMIN_PASSWORD) {
-    setAdminState(true);
-    adminStatus.textContent = "Admin login successful.";
-    adminPasswordInput.value = "";
-    renderHistory();
+function handleSubmit(event) {
+  event.preventDefault();
+
+  const formData = Object.fromEntries(new FormData(taskForm).entries());
+  if (!formData.title.trim()) {
+    titleInput.focus();
     return;
   }
 
-  setAdminState(false);
-  adminStatus.textContent = "Invalid admin username or password.";
+  if (editingTaskId) {
+    tasks = tasks.map((task) => {
+      if (task.id !== editingTaskId) {
+        return task;
+      }
+
+      return {
+        ...task,
+        title: formData.title.trim(),
+        priority: formData.priority,
+        estimate: Number(formData.estimate),
+        notes: formData.notes.trim(),
+      };
+    });
+  } else {
+    tasks.unshift(createTask(formData));
+  }
+
+  refreshUi();
+  resetForm();
 }
 
-function logoutAdmin() {
-  setAdminState(false);
-  adminUsernameInput.value = "";
-  adminPasswordInput.value = "";
-  adminStatus.textContent = "Admin logged out.";
-  renderHistory();
+function toggleTask(id) {
+  tasks = tasks.map((task) => (
+    task.id === id
+      ? { ...task, done: !task.done }
+      : task
+  ));
+  refreshUi();
 }
 
-function updatePreview() {
-  const data = getFormData();
-  const totalMinutes = getWorkedMinutes(data.clockIn, data.clockOut, data.breakMinutes);
+function deleteTask(id) {
+  tasks = tasks.filter((task) => task.id !== id);
 
-  reportTitle.textContent = data.title || "Untitled Project";
-  previewText.textContent = buildReportText(data);
-  hoursOutput.textContent = formatWorkedHours(totalMinutes);
-  previewDay.textContent = data.date
-    ? new Date(`${data.date}T00:00:00`).toLocaleDateString("en-US", { weekday: "long" })
-    : "Today";
-  previewMetaTime.textContent = data.clockOut || data.clockIn || getCurrentTimeValue();
+  if (editingTaskId === id) {
+    resetForm();
+  }
+
+  refreshUi();
 }
 
-function copyReport() {
-  const data = getFormData();
-  const report = `${data.title || "Untitled Project"}\n${buildReportText(data)}`;
+function loadTaskIntoForm(id) {
+  const task = tasks.find((item) => item.id === id);
+  if (!task) {
+    return;
+  }
 
-  navigator.clipboard.writeText(report).then(() => {
-    copyBtn.textContent = "Copied";
-    window.setTimeout(() => {
-      copyBtn.textContent = "Copy Report";
-    }, 1400);
-  }).catch(() => {
-    copyBtn.textContent = "Copy failed";
-    window.setTimeout(() => {
-      copyBtn.textContent = "Copy Report";
-    }, 1400);
+  editingTaskId = id;
+  titleInput.value = task.title;
+  priorityInput.value = task.priority;
+  estimateInput.value = String(task.estimate);
+  notesInput.value = task.notes;
+  saveTaskBtn.textContent = "Update Task";
+  titleInput.focus();
+}
+
+function clearCompletedTasks() {
+  tasks = tasks.filter((task) => !task.done);
+
+  if (editingTaskId && !tasks.some((task) => task.id === editingTaskId)) {
+    resetForm();
+  }
+
+  refreshUi();
+}
+
+function setFilter(filter) {
+  activeFilter = filter;
+  document.querySelectorAll(".filter-button").forEach((button) => {
+    button.classList.toggle("is-active", button.dataset.filter === filter);
   });
+  renderTasks();
 }
 
-function exportRowsAsXlsx(sheetName, rows, fileName) {
-  const worksheet = window.XLSX.utils.json_to_sheet(rows);
-  const workbook = window.XLSX.utils.book_new();
-  window.XLSX.utils.book_append_sheet(workbook, worksheet, sheetName);
-  window.XLSX.writeFile(workbook, fileName);
-}
-
-function exportToExcel() {
-  const data = getFormData();
-  const row = buildExportRow(data);
-
-  exportRowsAsXlsx("Current Record", [row], `${sanitizeFileName(data.title)}-${data.date || "report"}.xlsx`);
-
-  exportBtn.textContent = "Exported";
-  window.setTimeout(() => {
-    exportBtn.textContent = "Export Current";
-  }, 1500);
-}
-
-function exportHistoryToExcel() {
-  if (historyRecords.length === 0) {
-    exportHistoryBtn.textContent = "No history";
-    window.setTimeout(() => {
-      exportHistoryBtn.textContent = "Export Full History";
-    }, 1500);
+function loadStarterTasks() {
+  if (tasks.length > 0) {
     return;
   }
 
-  const rows = historyRecords
-    .slice()
-    .sort((a, b) => (a.work_date || "").localeCompare(b.work_date || ""))
-    .map((record) => buildExportRow(mapRecordToForm(record)));
+  tasks = [
+    createTask({ title: "Finish the highest-impact task first", priority: "high", estimate: "90", notes: "Pick the one thing that most improves today." }),
+    createTask({ title: "Reply to important messages", priority: "medium", estimate: "30", notes: "Keep it focused and avoid inbox drift." }),
+    createTask({ title: "Wrap up and review tomorrow", priority: "low", estimate: "15", notes: "Leave the next step obvious for future you." }),
+  ];
 
-  exportRowsAsXlsx("Attendance History", rows, "attendance-history.xlsx");
-
-  exportHistoryBtn.textContent = "Exported";
-  window.setTimeout(() => {
-    exportHistoryBtn.textContent = "Export Full History";
-  }, 1500);
+  refreshUi();
 }
 
-async function clearAllHistory() {
-  if (!isAdmin()) {
-    adminStatus.textContent = "Admin login required to clear history.";
-    return;
-  }
-
-  const { error } = await supabaseClient
-    .from(TABLE_NAME)
-    .delete()
-    .not("id", "is", null);
-
-  if (error) {
-    adminStatus.textContent = `Supabase clear error: ${error.message}`;
-    return;
-  }
-
-  adminStatus.textContent = "History cleared.";
-  clearForm();
-  await loadHistoryFromSupabase();
+function escapeHtml(value) {
+  const div = document.createElement("div");
+  div.textContent = value;
+  return div.innerHTML;
 }
 
-clearFormBtn.addEventListener("click", clearForm);
-saveRecordBtn.addEventListener("click", saveRecordToSupabase);
-copyBtn.addEventListener("click", copyReport);
-exportBtn.addEventListener("click", exportToExcel);
-exportHistoryBtn.addEventListener("click", exportHistoryToExcel);
-adminToggleBtn.addEventListener("click", toggleAdminPanel);
-adminLoginBtn.addEventListener("click", loginAdmin);
-adminLogoutBtn.addEventListener("click", logoutAdmin);
-clearHistoryBtn.addEventListener("click", clearAllHistory);
-form.addEventListener("input", updatePreview);
-titleInput.addEventListener("input", updatePreview);
+taskForm.addEventListener("submit", handleSubmit);
+resetFormBtn.addEventListener("click", resetForm);
+clearDoneBtn.addEventListener("click", clearCompletedTasks);
+loadStarterBtn.addEventListener("click", loadStarterTasks);
+document.querySelectorAll(".filter-button").forEach((button) => {
+  button.addEventListener("click", () => setFilter(button.dataset.filter));
+});
 
-setTodayDate();
-setEditingState(null);
+formatToday();
 updateClock();
-updateAdminUi();
-updatePreview();
-loadHistoryFromSupabase();
-subscribeToHistoryChanges();
+refreshUi();
 window.setInterval(updateClock, 1000);
