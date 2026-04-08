@@ -1,154 +1,679 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en">
-<head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Attendance Tracker</title>
-  <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="styles.css">
-</head>
-<body>
-  <main class="app-shell">
-    <section class="hero">
-      <div>
-        <p class="eyebrow">Attendance Tracker</p>
-        <h1>Track multiple work sessions in one day.</h1>
-        <p class="lede">Save one record per date, but let every session keep its own plan and outcome update.</p>
-      </div>
-      <div class="hero-clock-card">
-        <p class="hero-clock-label">Current time</p>
-        <p class="hero-clock-value" id="live-time">--:--:--</p>
-      </div>
-    </section>
-
-    <section class="content-grid">
-      <section class="panel form-panel">
-        <div class="panel-heading">
-          <h2>Daily Input</h2>
-          <p>Use one date, then add as many sessions as needed.</p>
-        </div>
-
-        <form id="report-form" class="editor-grid">
-          <label class="full-width">
-            <span>Project title</span>
-            <input id="title" name="title" type="text">
-          </label>
-
-          <label>
-            <span>Date</span>
-            <input id="date" name="date" type="date">
-          </label>
-
-          <label>
-            <span>Team</span>
-            <input id="team" name="team" type="text">
-          </label>
-
-          <label class="full-width">
-            <span>Work mode</span>
-            <select id="work-mode" name="workMode">
-              <option value="remote/field" selected>Remote / Field</option>
-              <option value="office">Office</option>
-              <option value="remote">Remote</option>
-              <option value="field">Field</option>
-            </select>
-          </label>
-
-          <section class="full-width session-section">
-            <div class="session-header">
-              <div>
-                <h3>Work Sessions</h3>
-                <p>Add one session for each clock in and clock out block.</p>
-              </div>
-              <button class="action-button secondary" id="add-session-btn" type="button">Add Session</button>
-            </div>
-            <div class="session-list" id="session-list"></div>
-          </section>
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Shared Travel Expense Tracker</title>
+    <style>
+      :root {
+        font-family: "Segoe UI", Arial, sans-serif;
+        background:
+          radial-gradient(circle at top left, rgba(15, 98, 254, 0.12), transparent 30%),
+          linear-gradient(180deg, #f5f8ff 0%, #f8fafc 100%);
+        color: #172033;
+        --panel: rgba(255, 255, 255, 0.95);
+        --panel-border: rgba(148, 163, 184, 0.25);
+        --text-muted: #5f6f86;
+        --primary: #0f62fe;
+        --primary-dark: #0b4fcc;
+        --danger: #c2410c;
+        --shadow: 0 20px 40px rgba(15, 23, 42, 0.08);
+      }
+      * { box-sizing: border-box; }
+      body { margin: 0; min-height: 100vh; }
+      button, input, textarea, select { font: inherit; }
+      button { cursor: pointer; }
+      .hidden { display: none !important; }
+      .auth-shell, .app-shell { min-height: 100vh; }
+      .auth-shell { display: grid; place-items: center; padding: 24px; }
+      .auth-card, .panel, .brand-card, .metric-card {
+        background: var(--panel); border: 1px solid var(--panel-border); border-radius: 24px; box-shadow: var(--shadow);
+      }
+      .auth-card { width: min(560px, 100%); padding: 32px; }
+      .app-shell { display: grid; grid-template-columns: 340px minmax(0, 1fr); gap: 24px; padding: 24px; }
+      .panel, .brand-card { padding: 20px; }
+      .brand-card { background: linear-gradient(135deg, #123469, #2059a8); color: white; }
+      .sidebar, .content, .stack { display: flex; flex-direction: column; gap: 20px; }
+      .eyebrow { margin: 0 0 8px; text-transform: uppercase; letter-spacing: 0.14em; font-size: 0.78rem; opacity: 0.8; }
+      .muted { color: var(--text-muted); }
+      .field { display: flex; flex-direction: column; gap: 8px; }
+      .field span { font-size: 0.92rem; font-weight: 600; }
+      input, textarea, select { width: 100%; border: 1px solid #d4dce8; border-radius: 14px; padding: 12px 14px; background: white; color: #172033; }
+      .button { border: 1px solid transparent; border-radius: 999px; padding: 10px 16px; background: transparent; }
+      .button.primary { background: var(--primary); color: white; }
+      .button.primary:hover { background: var(--primary-dark); }
+      .button.ghost, .button.secondary { border-color: #cbd5e1; background: white; }
+      .button.danger { color: var(--danger); border-color: rgba(194, 65, 12, 0.2); background: rgba(255, 237, 213, 0.8); }
+      .brand-card .button.ghost { color: white; background: transparent; border-color: rgba(255, 255, 255, 0.3); }
+      .hero, .section-heading, .inline-actions, .recent-item { display: flex; justify-content: space-between; align-items: center; gap: 12px; }
+      .grid.two { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; }
+      .trip-list, .recent-list, .summary-list { display: flex; flex-direction: column; gap: 12px; }
+      .trip-card { width: 100%; display: flex; flex-direction: column; gap: 4px; text-align: left; padding: 14px 16px; border-radius: 18px; border: 1px solid #dbe4f0; background: white; }
+      .trip-card.active { border-color: rgba(15, 98, 254, 0.4); background: rgba(239, 246, 255, 0.8); }
+      .metrics { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; }
+      .metric-card { padding: 18px 20px; }
+      .metric-card span { display: block; color: var(--text-muted); margin-bottom: 8px; }
+      .metric-card strong { font-size: 1.4rem; }
+      .content-grid { display: grid; grid-template-columns: minmax(0, 1.4fr) minmax(280px, 0.8fr); gap: 20px; }
+      .table-wrap { overflow-x: auto; }
+      table { width: 100%; border-collapse: collapse; }
+      th, td { padding: 14px 12px; border-bottom: 1px solid #e2e8f0; text-align: left; }
+      th { color: var(--text-muted); font-size: 0.9rem; }
+      .actions-cell { display: flex; gap: 8px; }
+      #receiptPreview img { width: 100%; max-height: 240px; object-fit: contain; border-radius: 16px; border: 1px solid #dbe4f0; background: #f8fafc; }
+      .receipt-file { padding: 14px; border-radius: 16px; border: 1px dashed #cbd5e1; background: #f8fafc; }
+      .banner, .feedback { margin: 0; padding: 12px 14px; border-radius: 16px; }
+      .banner { background: rgba(255, 255, 255, 0.85); border: 1px solid var(--panel-border); }
+      .feedback.error { color: #b91c1c; background: rgba(254, 226, 226, 0.75); }
+      .summary-list div { display: flex; justify-content: space-between; gap: 12px; padding: 12px 0; border-bottom: 1px solid #e2e8f0; }
+      .summary-list div:last-child { border-bottom: 0; }
+      @media (max-width: 1100px) { .app-shell { grid-template-columns: 1fr; } .content-grid { grid-template-columns: 1fr; } }
+      @media (max-width: 720px) { .app-shell { padding: 14px; gap: 16px; } .hero, .section-heading, .inline-actions, .recent-item { flex-direction: column; align-items: flex-start; } .metrics, .grid.two { grid-template-columns: 1fr; } }
+    </style>
+  </head>
+  <body>
+    <div id="authView" class="auth-shell">
+      <div class="auth-card">
+        <p class="eyebrow">Shared Travel Expense Tracker</p>
+        <h1>Simple shared app backed by Supabase.</h1>
+        <p class="muted">Use username <strong>admin</strong> and password <strong>HSUJ</strong> for admin mode. Any other username becomes a member. Receipt OCR now tries to read both images and PDFs. This admin rule is UI-only unless you add real Supabase Auth later.</p>
+        <form id="loginForm" class="stack">
+          <label class="field"><span>Username</span><input id="usernameInput" placeholder="admin" required /></label>
+          <label class="field"><span>Password</span><input id="passwordInput" type="password" placeholder="HSUJ" required /></label>
+          <button class="button primary" type="submit">Enter app</button>
         </form>
-      </section>
+        <p id="loginError" class="feedback error hidden"></p>
+      </div>
+    </div>
 
-      <section class="panel report-panel">
-        <div class="panel-heading">
-          <h2>Daily Summary</h2>
-          <p>The preview groups all sessions under the same date.</p>
+    <div id="appView" class="app-shell hidden">
+      <aside class="sidebar">
+        <div class="brand-card">
+          <p class="eyebrow">Live Shared Tracker</p>
+          <h2 id="roleTitle">Member workspace</h2>
+          <p id="userLabel"></p>
+          <button id="signOutButton" class="button ghost" type="button">Sign out</button>
         </div>
 
-        <div class="stats-grid">
-          <article class="stat-card">
-            <p class="stat-label">Working hours</p>
-            <p class="stat-value" id="hours-output">0 hours</p>
-          </article>
-          <article class="stat-card">
-            <p class="stat-label">Report day</p>
-            <p class="stat-value" id="preview-day">Today</p>
-          </article>
-          <article class="stat-card">
-            <p class="stat-label">Session count</p>
-            <p class="stat-value" id="session-count">1</p>
-          </article>
-        </div>
-
-        <article class="report-card">
-          <div class="report-card-header">
-            <div>
-              <p class="report-card-kicker">Generated report</p>
-              <h3 id="report-title">Untitled Project</h3>
-            </div>
-            <p class="edit-status" id="edit-status">New Record</p>
+        <form id="tripForm" class="panel stack">
+          <div class="section-heading">
+            <h3 id="tripFormTitle">Create trip</h3>
+            <button id="cancelTripEdit" class="button ghost hidden" type="button">Cancel</button>
           </div>
-          <pre class="report-output" id="preview-text"></pre>
-        </article>
+          <label class="field"><span>Trip name</span><input id="tripName" required /></label>
+          <div class="grid two">
+            <label class="field"><span>Budget</span><input id="tripBudget" type="number" min="0" step="0.01" required /></label>
+            <label class="field"><span>Start date</span><input id="tripStartDate" type="date" required /></label>
+          </div>
+          <label class="field"><span>End date</span><input id="tripEndDate" type="date" required /></label>
+          <button class="button primary" type="submit">Save trip</button>
+        </form>
 
-        <div class="summary-actions">
-          <button class="action-button ghost" id="clear-form-btn" type="button">Clear Form</button>
-          <button class="action-button ghost" id="save-record-btn" type="button">Save Record</button>
-          <button class="action-button ghost" id="copy-btn" type="button">Copy Report</button>
-          <button class="action-button secondary" id="export-btn" type="button">Export Current</button>
-          <button class="action-button primary" id="export-history-btn" type="button">Export Full History</button>
+        <div class="panel stack">
+          <div class="section-heading"><h3 id="tripListTitle">My trips</h3></div>
+          <div id="tripList" class="trip-list"></div>
+          <div id="tripActions" class="inline-actions hidden">
+            <button id="editTripButton" class="button ghost" type="button">Edit trip</button>
+            <button id="deleteTripButton" class="button danger hidden" type="button">Delete trip</button>
+          </div>
         </div>
-      </section>
-    </section>
+      </aside>
 
-    <section class="panel history-panel">
-      <div class="panel-heading history-heading">
-        <div>
-          <h2>Saved History</h2>
-          <p>One saved row per date. Saving the same date updates that row.</p>
-        </div>
-        <div class="admin-tools">
-          <button class="action-button ghost" id="admin-toggle-btn" type="button">Admin Login</button>
-          <button class="action-button ghost admin-only" id="clear-history-btn" type="button" hidden>Clear History</button>
-        </div>
-      </div>
+      <main class="content">
+        <header class="hero panel">
+          <div>
+            <p class="eyebrow">Dashboard</p>
+            <h1 id="heroTitle">Travel expense tracker</h1>
+            <p class="muted">Shared data is stored in Supabase so other people see the same trips and expenses.</p>
+          </div>
+          <div class="inline-actions">
+            <button id="refreshButton" class="button secondary" type="button">Refresh</button>
+            <button id="exportCsvButton" class="button primary" type="button">Download CSV</button>
+          </div>
+        </header>
 
-      <div class="admin-panel" id="admin-panel" hidden>
-        <div class="admin-grid">
-          <label>
-            <span>Username</span>
-            <input id="admin-username" type="text" autocomplete="username">
-          </label>
-          <label>
-            <span>Password</span>
-            <input id="admin-password" type="password" autocomplete="current-password">
-          </label>
-        </div>
-        <div class="admin-actions">
-          <button class="action-button primary" id="admin-login-btn" type="button">Login</button>
-          <button class="action-button ghost admin-only" id="admin-logout-btn" type="button" hidden>Logout</button>
-        </div>
-        <p class="admin-status" id="admin-status">Admin access is required to delete records or clear history.</p>
-      </div>
+        <p id="statusMessage" class="banner hidden"></p>
 
-      <div class="history-list" id="history-list">
-        <p class="history-empty" id="history-empty">No saved records yet.</p>
-      </div>
-    </section>
-  </main>
+        <section class="metrics">
+          <div class="metric-card"><span>Total budget</span><strong id="totalBudgetValue">$0.00</strong></div>
+          <div class="metric-card"><span>Total spent</span><strong id="totalSpentValue">$0.00</strong></div>
+          <div class="metric-card"><span>Remaining balance</span><strong id="remainingValue">$0.00</strong></div>
+        </section>
 
-  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-  <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
-  <script src="script.js"></script>
-</body>
+        <section class="content-grid">
+          <div class="stack">
+            <form id="expenseForm" class="panel stack">
+              <div class="section-heading">
+                <h3 id="expenseFormTitle">Add expense</h3>
+                <button id="cancelExpenseEdit" class="button ghost hidden" type="button">Cancel</button>
+              </div>
+              <div class="grid two">
+                <label class="field"><span>Amount</span><input id="expenseAmount" type="number" min="0" step="0.01" required /></label>
+                <label class="field"><span>Date</span><input id="expenseDate" type="date" required /></label>
+              </div>
+              <div class="grid two">
+                <label class="field"><span>Category</span><input id="expenseCategory" value="Transport" required /></label>
+                <label class="field"><span>Description</span><input id="expenseDescription" required /></label>
+              </div>
+              <label class="field">
+                <span>Receipt</span>
+                <input id="expenseReceipt" type="file" accept=".jpg,.jpeg,.png,.pdf,image/*,application/pdf" />
+              </label>
+              <div id="receiptPreview" class="hidden"></div>
+              <label class="field"><span>Remark</span><textarea id="expenseRemark" rows="3"></textarea></label>
+              <button class="button primary" type="submit">Save expense</button>
+            </form>
+
+            <div class="panel">
+              <div class="section-heading"><h3>Expenses</h3></div>
+              <div class="table-wrap">
+                <table>
+                  <thead>
+                    <tr><th>Date</th><th>Description</th><th>Category</th><th>Amount</th><th>Owner</th><th>Receipt</th><th>Remark</th><th></th></tr>
+                  </thead>
+                  <tbody id="expenseTableBody"></tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+
+          <div class="stack">
+            <div class="panel"><div class="section-heading"><h3>Recent expenses</h3></div><div id="recentExpenses" class="recent-list"></div></div>
+            <div class="panel">
+              <div class="section-heading"><h3>Access</h3></div>
+              <div class="summary-list">
+                <div><span>Username</span><strong id="accessUsername">-</strong></div>
+                <div><span>Role</span><strong id="accessRole">member</strong></div>
+                <div><span>Trips visible</span><strong id="accessTrips">0</strong></div>
+                <div><span>Delete access</span><strong id="accessDelete">Blocked</strong></div>
+              </div>
+            </div>
+          </div>
+        </section>
+      </main>
+    </div>
+
+    <script type="module">
+      import { createClient } from "https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/+esm";
+      import Tesseract from "https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.esm.min.js";
+      import * as pdfjsLib from "https://cdn.jsdelivr.net/npm/pdfjs-dist@4.4.168/+esm";
+      const SUPABASE_URL = "https://iljeeqfcrfpyauvmuefw.supabase.co";
+      const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImlsamVlcWZjcmZweWF1dm11ZWZ3Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzU0ODM5NjYsImV4cCI6MjA5MTA1OTk2Nn0.uNqeZgeCXtc_v0QxdMKg8t-egrhGVak5v2x8O-6HZrE";
+      const SESSION_KEY = "travel-expense-supabase-session";
+      const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+      pdfjsLib.GlobalWorkerOptions.workerSrc = "https://cdn.jsdelivr.net/npm/pdfjs-dist@4.4.168/build/pdf.worker.min.mjs";
+      const state = { session: null, trips: [], expenses: [], selectedTripId: "", editingTripId: null, editingExpenseId: null, currentReceiptUrl: "", currentReceiptName: "" };
+      const authView = document.getElementById("authView");
+      const appView = document.getElementById("appView");
+      const loginForm = document.getElementById("loginForm");
+      const loginError = document.getElementById("loginError");
+      const tripList = document.getElementById("tripList");
+      const expenseTableBody = document.getElementById("expenseTableBody");
+      const recentExpenses = document.getElementById("recentExpenses");
+      const statusMessage = document.getElementById("statusMessage");
+      const receiptInput = document.getElementById("expenseReceipt");
+      const receiptPreview = document.getElementById("receiptPreview");
+      function isAdmin() { return state.session?.role === "admin"; }
+      function formatCurrency(value) { return new Intl.NumberFormat(undefined, { style: "currency", currency: "USD", minimumFractionDigits: 2 }).format(Number(value || 0)); }
+      function formatDate(value) { return value ? new Date(value).toLocaleDateString(undefined, { year: "numeric", month: "short", day: "numeric" }) : "-"; }
+      function getVisibleTrips() { return isAdmin() ? state.trips : state.trips.filter((trip) => trip.owner_name === state.session.username); }
+      function getSelectedTrip() { return getVisibleTrips().find((trip) => trip.id === state.selectedTripId) || null; }
+      function getVisibleExpenses() { const tripIds = new Set(getVisibleTrips().map((trip) => trip.id)); return state.expenses.filter((expense) => tripIds.has(expense.trip_id)).sort((a, b) => new Date(b.expense_date) - new Date(a.expense_date)); }
+      function showStatus(message) { statusMessage.textContent = message; statusMessage.classList.remove("hidden"); }
+      function clearStatus() { statusMessage.classList.add("hidden"); statusMessage.textContent = ""; }
+      function resetTripForm() { document.getElementById("tripForm").reset(); state.editingTripId = null; document.getElementById("tripFormTitle").textContent = "Create trip"; document.getElementById("cancelTripEdit").classList.add("hidden"); }
+      function renderReceiptPreview(url, name) {
+        if (!url) {
+          receiptPreview.innerHTML = "";
+          receiptPreview.classList.add("hidden");
+          return;
+        }
+        const isPdf = (name || "").toLowerCase().endsWith(".pdf") || url.includes(".pdf");
+        receiptPreview.classList.remove("hidden");
+        receiptPreview.innerHTML = isPdf
+          ? '<div class="receipt-file"><a href="' + url + '" target="_blank" rel="noreferrer">Open receipt PDF</a></div>'
+          : '<img src="' + url + '" alt="Receipt preview" />';
+      }
+      function resetExpenseForm() {
+        document.getElementById("expenseForm").reset();
+        document.getElementById("expenseDate").value = new Date().toISOString().slice(0, 10);
+        document.getElementById("expenseCategory").value = "Transport";
+        state.editingExpenseId = null;
+        state.currentReceiptUrl = "";
+        state.currentReceiptName = "";
+        document.getElementById("expenseFormTitle").textContent = "Add expense";
+        document.getElementById("cancelExpenseEdit").classList.add("hidden");
+        renderReceiptPreview("", "");
+      }
+      function normalizeFilename(name) {
+        return name.replace(/[^\w.-]/g, "-");
+      }
+      function parseFilenameMetadata(filename) {
+        const basename = filename.replace(/\.[^.]+$/, "");
+        const normalized = basename.replace(/[_-]+/g, " ").trim();
+        const amountMatch = normalized.match(/(\d+[.,]\d{2})/);
+        const dateMatch = normalized.match(/(\d{4}[-_]\d{2}[-_]\d{2})|(\d{2}[-_]\d{2}[-_]\d{4})/);
+        const lower = normalized.toLowerCase();
+        const categories = [
+          ["Transport", ["grab", "taxi", "train", "bus", "flight", "airport", "transport"]],
+          ["Meals", ["meal", "food", "restaurant", "cafe", "lunch", "dinner", "breakfast"]],
+          ["Accommodation", ["hotel", "hostel", "airbnb", "accommodation", "stay"]],
+          ["Business", ["client", "meeting", "conference", "business"]],
+          ["Shopping", ["shop", "store", "mall", "shopping"]],
+        ];
+        const category = categories.find((item) => item[1].some((word) => lower.includes(word)))?.[0] || "";
+        const description = normalized
+          .replace(/(\d+[.,]\d{2})/g, "")
+          .replace(/(\d{4}[-_]\d{2}[-_]\d{2})|(\d{2}[-_]\d{2}[-_]\d{4})/g, "")
+          .replace(/\s+/g, " ")
+          .trim();
+        return {
+          amount: amountMatch ? amountMatch[1].replace(",", ".") : "",
+          date: dateMatch ? dateMatch[0].replace(/_/g, "-") : "",
+          category,
+          description,
+        };
+      }
+      function normalizeOcrDate(value) {
+        if (!value) return "";
+        if (/^\d{4}[/-]\d{2}[/-]\d{2}$/.test(value)) {
+          return value.replace(/\//g, "-");
+        }
+        if (/^\d{2}[/-]\d{2}[/-]\d{4}$/.test(value)) {
+          const [day, month, year] = value.split(/[/-]/);
+          return year + "-" + month + "-" + day;
+        }
+        return "";
+      }
+      function classifyCategory(lowerText) {
+        const categories = [
+          ["Transport", ["grab", "taxi", "train", "bus", "flight", "airport", "transport", "uber", "parking", "toll"]],
+          ["Meals", ["meal", "food", "restaurant", "cafe", "lunch", "dinner", "breakfast", "coffee", "tea"]],
+          ["Accommodation", ["hotel", "hostel", "airbnb", "accommodation", "stay", "resort", "inn"]],
+          ["Business", ["client", "meeting", "conference", "business", "expo", "summit"]],
+          ["Shopping", ["shop", "store", "mall", "shopping", "mart", "supermarket"]],
+        ];
+        return categories.find((item) => item[1].some((word) => lowerText.includes(word)))?.[0] || "";
+      }
+      function guessMerchant(lines) {
+        return lines.find((line) =>
+          /[A-Za-z]{3,}/.test(line) &&
+          !/(receipt|invoice|subtotal|total|tax|cash|change|thank|qty|amount|date)/i.test(line) &&
+          line.length <= 42
+        ) || "";
+      }
+      function parseOcrMetadata(text) {
+        const compact = text.replace(/\s+/g, " ").trim();
+        const lower = compact.toLowerCase();
+        const lines = text
+          .split(/\r?\n/)
+          .map((line) => line.trim())
+          .filter(Boolean);
+        const totalLine =
+          lines.find((line) => /(grand total|total due|amount due|total)/i.test(line) && /(\d+[.,]\d{2})/.test(line)) || "";
+        const totalLineAmount = totalLine.match(/(\d{1,6}[.,]\d{2})/);
+        const amountMatches = [...compact.matchAll(/(?:rm|usd|\$)?\s*(\d{1,6}[.,]\d{2})/gi)].map((match) => Number(match[1].replace(",", ".")));
+        const biggestAmount = totalLineAmount
+          ? Number(totalLineAmount[1].replace(",", "."))
+          : amountMatches.length
+            ? Math.max(...amountMatches)
+            : "";
+        const dateMatch = compact.match(/\b(\d{4}[/-]\d{2}[/-]\d{2}|\d{2}[/-]\d{2}[/-]\d{4})\b/);
+        const category = classifyCategory(lower);
+        const merchant = guessMerchant(lines);
+        const description = merchant || lines.find((line) => /[a-zA-Z]{3,}/.test(line) && !/(receipt|invoice|total|subtotal|tax)/i.test(line)) || "";
+        return {
+          amount: biggestAmount ? biggestAmount.toFixed(2) : "",
+          date: normalizeOcrDate(dateMatch?.[1] || ""),
+          category,
+          description,
+        };
+      }
+      async function renderPdfFirstPage(file) {
+        const bytes = new Uint8Array(await file.arrayBuffer());
+        const pdf = await pdfjsLib.getDocument({ data: bytes }).promise;
+        const page = await pdf.getPage(1);
+        const viewport = page.getViewport({ scale: 2 });
+        const canvas = document.createElement("canvas");
+        const context = canvas.getContext("2d");
+        canvas.width = viewport.width;
+        canvas.height = viewport.height;
+        await page.render({ canvasContext: context, viewport }).promise;
+        const blob = await new Promise((resolve) => canvas.toBlob(resolve, "image/png", 0.95));
+        return new File([blob], "pdf-page-preview.png", { type: "image/png" });
+      }
+      async function extractReceiptDataWithOcr(file) {
+        let ocrSource = file;
+        if (file.type === "application/pdf" || file.name.toLowerCase().endsWith(".pdf")) {
+          ocrSource = await renderPdfFirstPage(file);
+        } else if (!file.type.startsWith("image/")) {
+          return { amount: "", date: "", category: "", description: "" };
+        }
+        showStatus("Reading receipt text...");
+        const result = await Tesseract.recognize(ocrSource, "eng", {});
+        return parseOcrMetadata(result.data.text || "");
+      }
+      async function addWatermarkToImage(file) {
+        const imageUrl = URL.createObjectURL(file);
+        try {
+          const image = await new Promise((resolve, reject) => {
+            const img = new Image();
+            img.onload = () => resolve(img);
+            img.onerror = () => reject(new Error("Failed to load image for watermarking."));
+            img.src = imageUrl;
+          });
+          const canvas = document.createElement("canvas");
+          canvas.width = image.width;
+          canvas.height = image.height;
+          const context = canvas.getContext("2d");
+          context.drawImage(image, 0, 0);
+          const stamp = "Uploaded by " + state.session.username + " | " + new Date().toLocaleString();
+          const fontSize = Math.max(18, Math.round(canvas.width / 35));
+          context.font = "bold " + fontSize + "px Segoe UI";
+          context.fillStyle = "rgba(15, 23, 42, 0.65)";
+          context.fillRect(0, canvas.height - fontSize * 2.2, canvas.width, fontSize * 2.2);
+          context.fillStyle = "rgba(255, 255, 255, 0.92)";
+          context.fillText(stamp, 20, canvas.height - fontSize * 0.8);
+          const blob = await new Promise((resolve) => canvas.toBlob(resolve, file.type || "image/png", 0.92));
+          return new File([blob], "watermarked-" + normalizeFilename(file.name), { type: file.type || "image/png" });
+        } finally {
+          URL.revokeObjectURL(imageUrl);
+        }
+      }
+      async function uploadReceipt(file) {
+        const uploadableFile = file.type.startsWith("image/") ? await addWatermarkToImage(file) : file;
+        const filePath = state.session.username + "/" + Date.now() + "-" + normalizeFilename(uploadableFile.name);
+        const result = await supabase.storage.from("receipts").upload(filePath, uploadableFile, { upsert: true });
+        if (result.error) throw result.error;
+        const publicUrlResult = supabase.storage.from("receipts").getPublicUrl(filePath);
+        return { url: publicUrlResult.data.publicUrl, name: uploadableFile.name };
+      }
+      async function loadTrips() { const { data, error } = await supabase.from("trips").select("*").order("start_date", { ascending: false }); if (error) throw error; state.trips = data || []; }
+      async function loadExpenses() { const { data, error } = await supabase.from("expenses").select("*").order("expense_date", { ascending: false }); if (error) throw error; state.expenses = data || []; }
+      async function refreshData(showMessage = false) { await Promise.all([loadTrips(), loadExpenses()]); const visibleTrips = getVisibleTrips(); if (!visibleTrips.some((trip) => trip.id === state.selectedTripId)) state.selectedTripId = visibleTrips[0]?.id || ""; render(); if (showMessage) showStatus("Data refreshed."); }
+      function render() {
+        const loggedIn = Boolean(state.session);
+        authView.classList.toggle("hidden", loggedIn);
+        appView.classList.toggle("hidden", !loggedIn);
+        if (!loggedIn) return;
+        const trips = getVisibleTrips();
+        const selectedTrip = getSelectedTrip();
+        const expenses = getVisibleExpenses();
+        const totalBudget = trips.reduce((sum, trip) => sum + Number(trip.budget || 0), 0);
+        const totalSpent = expenses.reduce((sum, expense) => sum + Number(expense.amount || 0), 0);
+        document.getElementById("roleTitle").textContent = isAdmin() ? "Admin workspace" : "Member workspace";
+        document.getElementById("userLabel").textContent = "Signed in as " + state.session.username;
+        document.getElementById("tripListTitle").textContent = isAdmin() ? "All trips" : "My trips";
+        document.getElementById("heroTitle").textContent = selectedTrip?.name || "Travel expense tracker";
+        document.getElementById("accessUsername").textContent = state.session.username;
+        document.getElementById("accessRole").textContent = state.session.role;
+        document.getElementById("accessTrips").textContent = String(trips.length);
+        document.getElementById("accessDelete").textContent = isAdmin() ? "Allowed" : "Blocked";
+        document.getElementById("totalBudgetValue").textContent = formatCurrency(totalBudget);
+        document.getElementById("totalSpentValue").textContent = formatCurrency(totalSpent);
+        document.getElementById("remainingValue").textContent = formatCurrency(totalBudget - totalSpent);
+        document.getElementById("deleteTripButton").classList.toggle("hidden", !isAdmin());
+        document.getElementById("tripActions").classList.toggle("hidden", !selectedTrip);
+        tripList.innerHTML = "";
+        if (!trips.length) {
+          tripList.innerHTML = '<p class="muted">No trips yet.</p>';
+        } else {
+          trips.forEach((trip) => {
+            const button = document.createElement("button");
+            button.type = "button";
+            button.className = "trip-card" + (trip.id === state.selectedTripId ? " active" : "");
+            button.innerHTML = "<span>" + trip.name + "</span><small>" + formatDate(trip.start_date) + " - " + formatDate(trip.end_date) + "</small><small>Owner: " + trip.owner_name + "</small><strong>" + formatCurrency(trip.budget) + "</strong>";
+            button.addEventListener("click", () => { state.selectedTripId = trip.id; state.editingExpenseId = null; resetExpenseForm(); render(); });
+            tripList.appendChild(button);
+          });
+        }
+        expenseTableBody.innerHTML = "";
+        if (!expenses.length) {
+          expenseTableBody.innerHTML = '<tr><td colspan="8" class="muted">No expenses yet.</td></tr>';
+        } else {
+          expenses.forEach((expense) => {
+            const row = document.createElement("tr");
+            const ownerTrip = state.trips.find((trip) => trip.id === expense.trip_id);
+            const canEdit = isAdmin() || ownerTrip?.owner_name === state.session.username;
+            row.innerHTML = "<td>" + formatDate(expense.expense_date) + "</td><td>" + (expense.description || "-") + "</td><td>" + (expense.category || "-") + "</td><td>" + formatCurrency(expense.amount) + "</td><td>" + (expense.owner_name || "-") + "</td><td>" + (expense.receipt_url ? '<a href=\"' + expense.receipt_url + '\" target=\"_blank\" rel=\"noreferrer\">View</a>' : '-') + "</td><td>" + (expense.remark || "-") + "</td><td class='actions-cell'></td>";
+            const actions = row.querySelector(".actions-cell");
+            if (canEdit) {
+              const editButton = document.createElement("button");
+              editButton.type = "button";
+              editButton.className = "button ghost";
+              editButton.textContent = "Edit";
+              editButton.addEventListener("click", () => {
+                state.editingExpenseId = expense.id;
+                document.getElementById("expenseAmount").value = expense.amount;
+                document.getElementById("expenseDate").value = expense.expense_date;
+                document.getElementById("expenseCategory").value = expense.category;
+                document.getElementById("expenseDescription").value = expense.description;
+                document.getElementById("expenseRemark").value = expense.remark || "";
+                state.currentReceiptUrl = expense.receipt_url || "";
+                state.currentReceiptName = expense.receipt_name || "";
+                renderReceiptPreview(state.currentReceiptUrl, state.currentReceiptName);
+                document.getElementById("expenseFormTitle").textContent = "Edit expense";
+                document.getElementById("cancelExpenseEdit").classList.remove("hidden");
+              });
+              actions.appendChild(editButton);
+            }
+            if (isAdmin()) {
+              const deleteButton = document.createElement("button");
+              deleteButton.type = "button";
+              deleteButton.className = "button danger";
+              deleteButton.textContent = "Delete";
+              deleteButton.addEventListener("click", async () => {
+                if (!confirm('Delete "' + expense.description + '"?')) return;
+                const { error } = await supabase.from("expenses").delete().eq("id", expense.id);
+                if (error) return showStatus(error.message);
+                await refreshData();
+                showStatus("Expense deleted.");
+              });
+              actions.appendChild(deleteButton);
+            }
+            expenseTableBody.appendChild(row);
+          });
+        }
+        recentExpenses.innerHTML = "";
+        if (!expenses.length) {
+          recentExpenses.innerHTML = '<p class="muted">Recent expenses will appear here.</p>';
+        } else {
+          expenses.slice(0, 6).forEach((expense) => {
+            const item = document.createElement("div");
+            item.className = "recent-item";
+            item.innerHTML = "<div><strong>" + expense.description + "</strong><p class='muted'>" + expense.category + " | " + formatDate(expense.expense_date) + "</p></div><span>" + formatCurrency(expense.amount) + "</span>";
+            recentExpenses.appendChild(item);
+          });
+        }
+      }
+      loginForm.addEventListener("submit", async (event) => {
+        event.preventDefault();
+        loginError.classList.add("hidden");
+        const username = document.getElementById("usernameInput").value.trim();
+        const password = document.getElementById("passwordInput").value;
+        if (!username || !password) {
+          loginError.textContent = "Enter both username and password.";
+          loginError.classList.remove("hidden");
+          return;
+        }
+        state.session = username === "admin" && password === "HSUJ"
+          ? { username: "admin", role: "admin" }
+          : { username, role: "member" };
+        localStorage.setItem(SESSION_KEY, JSON.stringify(state.session));
+        clearStatus();
+        try {
+          await refreshData();
+        } catch (error) {
+          showStatus(error.message);
+        }
+      });
+
+      document.getElementById("signOutButton").addEventListener("click", () => {
+        state.session = null;
+        localStorage.removeItem(SESSION_KEY);
+        resetTripForm();
+        resetExpenseForm();
+        render();
+      });
+
+      document.getElementById("tripForm").addEventListener("submit", async (event) => {
+        event.preventDefault();
+        const payload = {
+          name: document.getElementById("tripName").value.trim(),
+          budget: Number(document.getElementById("tripBudget").value || 0),
+          start_date: document.getElementById("tripStartDate").value,
+          end_date: document.getElementById("tripEndDate").value,
+          owner_name: state.session.username,
+        };
+        let result;
+        if (state.editingTripId) {
+          result = await supabase.from("trips").update(payload).eq("id", state.editingTripId);
+        } else {
+          result = await supabase.from("trips").insert(payload);
+        }
+        if (result.error) return showStatus(result.error.message);
+        const wasEditing = Boolean(state.editingTripId);
+        resetTripForm();
+        await refreshData();
+        showStatus(wasEditing ? "Trip updated." : "Trip saved.");
+      });
+
+      document.getElementById("expenseForm").addEventListener("submit", async (event) => {
+        event.preventDefault();
+        const selectedTrip = getSelectedTrip();
+        if (!selectedTrip) return showStatus("Select a trip first.");
+        let receiptUrl = state.currentReceiptUrl || "";
+        let receiptName = state.currentReceiptName || "";
+        const receiptFile = receiptInput.files[0];
+        if (receiptFile) {
+          try {
+            const uploadResult = await uploadReceipt(receiptFile);
+            receiptUrl = uploadResult.url;
+            receiptName = uploadResult.name;
+          } catch (error) {
+            return showStatus(error.message || "Receipt upload failed.");
+          }
+        }
+        const payload = {
+          trip_id: selectedTrip.id,
+          amount: Number(document.getElementById("expenseAmount").value || 0),
+          category: document.getElementById("expenseCategory").value.trim(),
+          description: document.getElementById("expenseDescription").value.trim(),
+          expense_date: document.getElementById("expenseDate").value,
+          remark: document.getElementById("expenseRemark").value.trim(),
+          owner_name: selectedTrip.owner_name,
+          receipt_url: receiptUrl,
+          receipt_name: receiptName,
+        };
+        let result;
+        if (state.editingExpenseId) {
+          result = await supabase.from("expenses").update(payload).eq("id", state.editingExpenseId);
+        } else {
+          result = await supabase.from("expenses").insert(payload);
+        }
+        if (result.error) return showStatus(result.error.message);
+        const wasEditing = Boolean(state.editingExpenseId);
+        resetExpenseForm();
+        await refreshData();
+        showStatus(wasEditing ? "Expense updated." : "Expense saved.");
+      });
+
+      document.getElementById("editTripButton").addEventListener("click", () => {
+        const trip = getSelectedTrip();
+        if (!trip) return;
+        state.editingTripId = trip.id;
+        document.getElementById("tripName").value = trip.name;
+        document.getElementById("tripBudget").value = trip.budget;
+        document.getElementById("tripStartDate").value = trip.start_date;
+        document.getElementById("tripEndDate").value = trip.end_date;
+        document.getElementById("tripFormTitle").textContent = "Edit trip";
+        document.getElementById("cancelTripEdit").classList.remove("hidden");
+      });
+
+      document.getElementById("deleteTripButton").addEventListener("click", async () => {
+        const trip = getSelectedTrip();
+        if (!trip || !isAdmin()) return;
+        if (!confirm('Delete "' + trip.name + '" and all linked expenses?')) return;
+        const expenseResult = await supabase.from("expenses").delete().eq("trip_id", trip.id);
+        if (expenseResult.error) return showStatus(expenseResult.error.message);
+        const tripResult = await supabase.from("trips").delete().eq("id", trip.id);
+        if (tripResult.error) return showStatus(tripResult.error.message);
+        state.selectedTripId = "";
+        await refreshData();
+        showStatus("Trip deleted.");
+      });
+
+      document.getElementById("cancelTripEdit").addEventListener("click", resetTripForm);
+      document.getElementById("cancelExpenseEdit").addEventListener("click", resetExpenseForm);
+      receiptInput.addEventListener("change", async () => {
+        const file = receiptInput.files[0];
+        if (!file) {
+          renderReceiptPreview(state.currentReceiptUrl, state.currentReceiptName);
+          return;
+        }
+        const today = new Date().toISOString().slice(0, 10);
+        const filenameAutofill = parseFilenameMetadata(file.name);
+        let ocrAutofill = { amount: "", date: "", category: "", description: "" };
+        try {
+          ocrAutofill = await extractReceiptDataWithOcr(file);
+        } catch (error) {
+          showStatus("Receipt uploaded preview ready. OCR could not read this file.");
+        }
+        const autofill = {
+          amount: ocrAutofill.amount || filenameAutofill.amount,
+          date: ocrAutofill.date || filenameAutofill.date,
+          category: ocrAutofill.category || filenameAutofill.category,
+          description: ocrAutofill.description || filenameAutofill.description,
+        };
+        if (autofill.amount && !document.getElementById("expenseAmount").value) {
+          document.getElementById("expenseAmount").value = autofill.amount;
+        }
+        if (autofill.date && (!document.getElementById("expenseDate").value || document.getElementById("expenseDate").value === today)) {
+          document.getElementById("expenseDate").value = autofill.date;
+        }
+        if (autofill.category && document.getElementById("expenseCategory").value === "Transport") {
+          document.getElementById("expenseCategory").value = autofill.category;
+        }
+        if (autofill.description && !document.getElementById("expenseDescription").value) {
+          document.getElementById("expenseDescription").value = autofill.description;
+        }
+        const localPreviewUrl = URL.createObjectURL(file);
+        state.currentReceiptUrl = localPreviewUrl;
+        state.currentReceiptName = file.name;
+        renderReceiptPreview(localPreviewUrl, file.name);
+        if (autofill.amount || autofill.date || autofill.category || autofill.description) {
+          showStatus("Receipt scanned. Suggested fields were filled in.");
+        }
+      });
+      document.getElementById("refreshButton").addEventListener("click", async () => {
+        await refreshData(true);
+      });
+
+      document.getElementById("exportCsvButton").addEventListener("click", () => {
+        const expenses = getVisibleExpenses();
+        const rows = [["Date", "Description", "Category", "Amount", "Owner", "Receipt", "Remark"]].concat(
+          expenses.map((expense) => [expense.expense_date, expense.description, expense.category, expense.amount, expense.owner_name, expense.receipt_url || "", expense.remark || ""]),
+        );
+        const csv = rows.map((row) => row.map((cell) => '"' + String(cell).replace(/"/g, '""') + '"').join(",")).join("\n");
+        const blob = new Blob([csv], { type: "text/csv" });
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement("a");
+        link.href = url;
+        link.download = "travel-expenses.csv";
+        link.click();
+        URL.revokeObjectURL(url);
+      });
+
+      try {
+        state.session = JSON.parse(localStorage.getItem(SESSION_KEY));
+      } catch {
+        state.session = null;
+      }
+      resetExpenseForm();
+      render();
+      if (state.session) {
+        refreshData().catch((error) => showStatus(error.message));
+      }
+    </script>
+  </body>
 </html>
